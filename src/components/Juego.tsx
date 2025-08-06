@@ -23,11 +23,11 @@ export default function Juego() {
   };
 
   return (
-    <main className="p-6 text-center min-h-screen bg-gray-100">
-      <h2 className="text-xl font-bold mb-4">Empareja las figuras con su tipo</h2>
+    <main className="h-screen w-screen bg-gray-100 flex flex-col p-6 overflow-hidden">
+      <h2 className="text-xl font-bold mb-4 text-center">Empareja las figuras con su tipo</h2>
 
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div className="flex justify-center flex-wrap mb-6">
+        <div className="flex justify-center flex-wrap mb-6 flex-shrink-0">
           {figurasMeta.map((zona) => (
             <DropZona key={zona.id} id={zona.id} tipo={zona.tipo}>
               <span className="capitalize font-semibold">{zona.tipo}</span>
@@ -35,7 +35,7 @@ export default function Juego() {
           ))}
         </div>
 
-        <div className="flex justify-center flex-wrap">
+        <div className="flex justify-center flex-wrap flex-1 items-start">
           {items.map((item) =>
             !emparejados[item.id] ? (
               <DraggableFigura key={item.id} {...item} />
@@ -45,7 +45,7 @@ export default function Juego() {
       </DndContext>
 
       {Object.keys(emparejados).length === figurasBase.length && (
-        <p className="text-green-700 font-semibold mt-4">¡Bien hecho!</p>
+        <p className="text-green-700 font-semibold mt-4 text-center">¡Bien hecho!</p>
       )}
     </main>
   );
