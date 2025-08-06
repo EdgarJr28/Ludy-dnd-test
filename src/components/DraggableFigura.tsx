@@ -7,6 +7,7 @@ interface Props {
   id: string;
   tipo: string;
   color: string;
+  tamaño?: string;
 }
 
 const colorMap: Record<string, string> = {
@@ -16,7 +17,7 @@ const colorMap: Record<string, string> = {
   yellow: "bg-yellow-400",
 };
 
-export default function DraggableFigura({ id, tipo, color }: Props) {
+export default function DraggableFigura({ id, tipo, color, tamaño }: Props) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id,
   });
@@ -30,6 +31,9 @@ export default function DraggableFigura({ id, tipo, color }: Props) {
   const figuraEstilo =
     tipo === "circulo" ? "rounded-full" : tipo === "cuadro" ? "" : "";
 
+  // Determinar el tamaño basado en la prop tamaño - más pequeños
+  const sizeClass = tamaño === "grande" ? "w-16 h-16" : "w-12 h-12";
+
   return (
     <div
       ref={setNodeRef}
@@ -37,7 +41,8 @@ export default function DraggableFigura({ id, tipo, color }: Props) {
       {...listeners}
       {...attributes}
       className={clsx(
-        "w-20 h-20 m-2",
+        sizeClass,
+        "m-1",
         colorMap[color],
         figuraEstilo
       )}
