@@ -13,27 +13,102 @@ import {
 import DropZona from "../components/DropZona";
 import DraggableFigura from "../components/DraggableFigura";
 import { figurasBase, figurasMeta } from "@/libs/Figuras";
-import { fasesTest, getIndicacionAleatoria, getIndicacionAleatoriaValida, analizarIndicacion } from "@/libs/TestPhases";
+import { fasesTest, analizarIndicacion } from "@/libs/TestPhases";
+// Hook para manejar preguntas aleatorias sin repetición por fase
+function useRandomNoRepeatIndicacion(faseIdx: number, total: number) {
+  const [usadas, setUsadas] = React.useState<Set<number>>(new Set());
+  const [lastIdx, setLastIdx] = React.useState<number | null>(null);
+  // Llama para obtener un índice aleatorio no repetido
+  const getNoRepeat = React.useCallback(() => {
+    if (usadas.size >= total) {
+      setUsadas(new Set());
+      setLastIdx(null);
+      return 0; // reinicia y muestra la primera
+    }
+    let idx = Math.floor(Math.random() * total);
+    let tries = 0;
+    while ((usadas.has(idx) || idx === lastIdx) && tries < 50) {
+      idx = Math.floor(Math.random() * total);
+      tries++;
+    }
+    setUsadas(prev => new Set(prev).add(idx));
+    setLastIdx(idx);
+    return idx;
+  }, [usadas, total, lastIdx]);
+  // Resetear cuando cambia la fase
+  React.useEffect(() => { setUsadas(new Set()); setLastIdx(null); }, [faseIdx, total]);
+  return getNoRepeat;
+}
 import FeedbackVisual from "../components/FeedbackVisual";
 
 // Función para mezclar arrays
-const shuffleArray = <T,>(array: T[]): T[] => {
+
+// Función global para mezclar arrays
+function shuffleArray<T>(array: T[]): T[] {
   const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
   }
   return newArray;
-};
+}
+
+// Mezcla asegurando que en cada columna (por fila de círculo y cuadro) no se repita el color
+function shuffleNoRepeatColor(figurasBase: any[]): any[] {
+  const cg = figurasBase.filter(f => f.tamaño === "grande" && f.tipo === "circulo");
+  const qg = figurasBase.filter(f => f.tamaño === "grande" && f.tipo === "cuadro");
+  const cp = figurasBase.filter(f => f.tamaño === "pequeño" && f.tipo === "circulo");
+  const qp = figurasBase.filter(f => f.tamaño === "pequeño" && f.tipo === "cuadro");
+  let ok = false;
+  let maxTries = 20;
+  let res: Figura[] = [];
+  while (!ok && maxTries-- > 0) {
+    const scg = shuffleArray(cg);
+    const sqg = shuffleArray(qg);
+    ok = true;
+    for (let i = 0; i < 5; i++) {
+      if (scg[i].color === sqg[i].color) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) {
+      const scp = shuffleArray(cp);
+      const sqp = shuffleArray(qp);
+      res = [...scg, ...sqg, ...scp, ...sqp];
+    }
+  }
+  if (!ok) return shuffleArray(figurasBase);
+  return res;
+}
 
 export default function Juego() {
-  const [figuras, setFiguras] = useState(figurasBase);
-  const [zonas, setZonas] = useState(figurasMeta);
+  // Para consignas mixtas: guardar tiempo de inicio de cada grupo
+  const [tiempoInicioCuad, setTiempoInicioCuad] = useState<number | null>(null);
+  const [tiempoFinCuad, setTiempoFinCuad] = useState<number | null>(null);
+  const [tiempoInicioCirc, setTiempoInicioCirc] = useState<number | null>(null);
+  // Para consignas de velocidad: guardar tiempo de inicio de la indicación
+  const [tiempoInicio, setTiempoInicio] = useState<number | null>(null);
+  // Hook para evitar repetición de preguntas en la fase actual
+  const [figuras, setFiguras] = useState(() => shuffleNoRepeatColor(figurasBase));
+  const [zonas, setZonas] = useState(() => shuffleArray(figurasMeta));
+  // Hook para evitar repetición de preguntas en la fase actual (debe ir después de faseIdx)
   const [emparejados, setEmparejados] = useState<{ [key: string]: string }>({});
+  // Emparejados es la fuente de verdad, pero cada vez que se agregue un nuevo emparejamiento correcto, también incrementamos aciertos
   const [intentosFallidos, setIntentosFallidos] = useState(0);
+  const [aciertos, setAciertos] = useState(0);
   const [juegoCompletado, setJuegoCompletado] = useState(false);
   const [faseIdx, setFaseIdx] = useState(0);
-  const [indicacion, setIndicacion] = useState<{ texto: string; idx: number } | null>(null);
+  // Hook para evitar repetición de preguntas en la fase actual (debe ir después de faseIdx)
+  const getNoRepeatIndicacion = useRandomNoRepeatIndicacion(faseIdx, fasesTest[faseIdx]?.indicaciones.length || 0);
+  const [indicacionIdx, setIndicacionIdx] = useState(0);
+  // Ya no se usa setIndicacion aleatoria, sino la del array de la fase
+  const indicacion = useMemo(() => {
+    const fase = fasesTest[faseIdx];
+    if (!fase) return null;
+    const texto = fase.indicaciones[indicacionIdx] || "";
+    return { texto, idx: indicacionIdx };
+  }, [faseIdx, indicacionIdx]);
   const [seleccion, setSeleccion] = useState<string[]>([]);
   const [mensajeValidacion, setMensajeValidacion] = useState<string | null>(null);
   const [feedbackTipo, setFeedbackTipo] = useState<"error" | "exito" | null>(null);
@@ -76,17 +151,16 @@ export default function Juego() {
     const txt = indicacion?.texto || "(sin indicación)";
     const prefix = ok ? "✅" : "❌";
     console.log(`[VALIDACION] ${prefix} ${txt}${detalle ? ` — ${detalle}` : ""}`);
+    if (ok) setAciertos(prev => prev + 1);
   }, [indicacion?.texto]);
 
   // Función para mezclar el juego
   const mezclarJuego = useCallback(() => {
-    setFiguras(shuffleArray(figurasBase));
+    setFiguras(shuffleNoRepeatColor(figurasBase));
     setZonas(shuffleArray(figurasMeta));
     setEmparejados({});
     setIntentosFallidos(0);
     setJuegoCompletado(false);
-  // mantener fase/indicacion
-  setIndicacion(getIndicacionAleatoria(faseIdx));
   }, []);
 
   // Función para reiniciar el juego
@@ -94,10 +168,11 @@ export default function Juego() {
     setFiguras(figurasBase);
     setZonas(figurasMeta);
     setEmparejados({});
+    setAciertos(0);
     setIntentosFallidos(0);
     setJuegoCompletado(false);
     setFaseIdx(0);
-    setIndicacion(getIndicacionAleatoria(0));
+  // Ya no se usa setIndicacion
   }, []);
 
   // Filtros de escenario según fase
@@ -126,15 +201,25 @@ export default function Juego() {
 
   // Inicializar indicación si falta
   React.useEffect(() => {
-    setIndicacion(getIndicacionAleatoriaValida(faseIdx, figurasEscenario as any));
+  setTiempoInicioCuad(null);
+  setTiempoFinCuad(null);
+  setTiempoInicioCirc(null);
+    // Ya no se usa setIndicacion
     // limpiar emparejamientos al cambiar de fase para mantener el mismo escenario pero sin estado previo
     setEmparejados({});
-  setZoneOrder({});
+    setZoneOrder({});
     setIntentosFallidos(0);
     setJuegoCompletado(false);
     setSeleccion([]);
     setMensajeValidacion(null);
+    setAciertos(0);
+    setTiempoInicio(Date.now()); // Reiniciar tiempo al cambiar de fase
   }, [faseIdx]);
+
+  // Reiniciar tiempo al cambiar de indicación
+  React.useEffect(() => {
+    setTiempoInicio(Date.now());
+  }, [indicacionIdx]);
 
   // sin modal, iniciación implícita al cambiar fase o al avanzar de indicación
 
@@ -147,8 +232,111 @@ export default function Juego() {
 
   // Parser básico para instrucciones “Señale …” compatibles
   const validarSeleccion = useCallback(() => {
-    if (!indicacion) return false;
-    const texto = indicacion.texto.toLowerCase();
+  // Validación especial para consignas de velocidad
+  const texto = indicacion?.texto.toLowerCase() || "";
+    // Consigna mixta: "Señale todos los cuadrados lentamente y los círculos rápidamente"
+    const esMixta = texto.includes("cuadrados") && texto.includes("lenta") && texto.includes("circulos") && texto.includes("rápid");
+    if (esMixta) {
+      const cuadrados = figurasEscenario.filter(f => f.tipo === "cuadro");
+      const circulos = figurasEscenario.filter(f => f.tipo === "circulo");
+      const seleccionSet = new Set(seleccion);
+      const selCuad = cuadrados.filter(f => seleccionSet.has(f.id));
+      const selCirc = circulos.filter(f => seleccionSet.has(f.id));
+      // Si empieza a seleccionar cuadrados, guardar tiempo de inicio
+      if (selCuad.length === 1 && !tiempoInicioCuad) setTiempoInicioCuad(Date.now());
+      // Si termina de seleccionar cuadrados, guardar tiempo de fin y tiempo de inicio de círculos
+      if (selCuad.length === cuadrados.length && !tiempoFinCuad) {
+        setTiempoFinCuad(Date.now());
+        setTiempoInicioCirc(Date.now());
+      }
+      // Si empieza a seleccionar círculos, guardar tiempo de inicio si no se ha guardado
+      if (selCirc.length === 1 && !tiempoInicioCirc && tiempoFinCuad) setTiempoInicioCirc(Date.now());
+      // Solo validar si ambos grupos están completos
+      if (selCuad.length === cuadrados.length && selCirc.length === circulos.length && tiempoInicioCuad && tiempoFinCuad && tiempoInicioCirc) {
+        const deltaCuad = (tiempoFinCuad - tiempoInicioCuad) / 1000;
+        const deltaCirc = (Date.now() - tiempoInicioCirc) / 1000;
+        let ok = false;
+        let msg = "";
+        if (deltaCuad >= 4 && deltaCirc <= 2) {
+          ok = true;
+          msg = `✅ Correcto (cuadrados lento: ${deltaCuad.toFixed(2)}s, círculos rápido: ${deltaCirc.toFixed(2)}s)`;
+        } else {
+          if (deltaCuad < 4) msg = `❌ Cuadrados demasiado rápido (${deltaCuad.toFixed(2)}s)`;
+          if (deltaCirc > 2) msg += (msg ? " | " : "") + `❌ Círculos demasiado lento (${deltaCirc.toFixed(2)}s)`;
+        }
+        setMensajeValidacion(msg);
+        setFeedbackTipo(ok ? "exito" : "error");
+        if (ok) {
+          setTimeout(() => {
+            setFeedbackTipo(null);
+            if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+              setFaseIdx(prev => prev + 1);
+              setIndicacionIdx(0);
+            } else {
+              setIndicacionIdx(prev => prev + 1);
+            }
+            setSeleccion([]);
+            setTiempoInicioCuad(null);
+            setTiempoFinCuad(null);
+            setTiempoInicioCirc(null);
+            setTiempoInicio(Date.now());
+          }, 1000);
+        } else {
+          setTimeout(() => setFeedbackTipo(null), 1200);
+        }
+      }
+      return;
+    }
+    // Consignas simples de velocidad
+    const isRapido = texto.includes("rápid") || texto.includes("rapido") || texto.includes("rápidamente") || texto.includes("rapidamente");
+    const isLento = texto.includes("lenta") || texto.includes("lentamente");
+    const esTodosCuadrados = texto.includes("todos los cuadrados") || texto.includes("todos los cuadros");
+    const esTodosCirculos = texto.includes("todos los circulos") || texto.includes("todos los círculos");
+    if ((isRapido || isLento) && (esTodosCuadrados || esTodosCirculos)) {
+      // Determinar el tipo
+      const tipo = esTodosCuadrados ? "cuadro" : "circulo";
+      const candidatos = figurasEscenario.filter(f => f.tipo === tipo);
+      const seleccionSet = new Set(seleccion);
+      const selFig = figurasEscenario.filter(f => seleccionSet.has(f.id));
+      // Si seleccionó todos los del tipo
+      if (selFig.length === candidatos.length && selFig.every(f => f.tipo === tipo)) {
+        const tiempoFin = Date.now();
+        const delta = tiempoInicio ? (tiempoFin - tiempoInicio) / 1000 : null;
+        let ok = false;
+        let msg = "";
+        if (isRapido && delta !== null && delta <= 2) {
+          ok = true;
+          msg = `✅ Correcto (rápido: ${delta.toFixed(2)}s)`;
+        } else if (isLento && delta !== null && delta >= 4) {
+          ok = true;
+          msg = `✅ Correcto (lento: ${delta.toFixed(2)}s)`;
+        } else if (delta !== null) {
+          msg = isRapido ? `❌ Demasiado lento (${delta.toFixed(2)}s)` : `❌ Demasiado rápido (${delta.toFixed(2)}s)`;
+        } else {
+          msg = "❌ No se pudo medir el tiempo";
+        }
+        setMensajeValidacion(msg);
+        setFeedbackTipo(ok ? "exito" : "error");
+        if (ok) {
+          setTimeout(() => {
+            setFeedbackTipo(null);
+            if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+              setFaseIdx(prev => prev + 1);
+              setIndicacionIdx(0);
+            } else {
+              setIndicacionIdx(prev => prev + 1);
+            }
+            setSeleccion([]);
+            setTiempoInicio(Date.now());
+          }, 1000);
+        } else {
+          setTimeout(() => setFeedbackTipo(null), 1200);
+        }
+      }
+      return;
+    }
+  if (!indicacion) return false;
+  // (Eliminada la redeclaración de 'texto')
 
     // Normalizar términos
     const termCirculo = texto.includes("circulo") || texto.includes("círculo");
@@ -207,7 +395,8 @@ export default function Juego() {
       const selIds = new Set(seleccion);
       const ok = targetIds.size > 0 && targetIds.size === selIds.size && [...targetIds].every(id => selIds.has(id));
   setMensajeValidacion(ok ? "✅ Correcto" : "❌ Selección incorrecta");
-  if (!ok) setIntentosFallidos(prev => prev + 1);
+  if (ok) setAciertos(prev => prev + 1);
+  else setIntentosFallidos(prev => prev + 1);
   return ok;
     }
 
@@ -242,9 +431,10 @@ export default function Juego() {
       const selIds = new Set(seleccion);
       // Debe haber exactamente 2 selecciones y una debe pertenecer a cada conjunto
       const ok = seleccionFiguras.length === Math.min(2, setTargets.length) && setTargets.every(s => [...selIds].some(id => s.has(id)));
-      setMensajeValidacion(ok ? "✅ Correcto" : "❌ Selección incorrecta");
-      if (!ok) setIntentosFallidos(prev => prev + 1);
-      return ok;
+  setMensajeValidacion(ok ? "✅ Correcto" : "❌ Selección incorrecta");
+  if (ok) setAciertos(prev => prev + 1);
+  else setIntentosFallidos(prev => prev + 1);
+  return ok;
     }
 
     // Casos “A y B” / “A o B”: estrategia simple separando por conjunción
@@ -286,7 +476,8 @@ export default function Juego() {
         ok = setTargets.some(s => [...selIds].some(id => s.has(id))) && seleccionFiguras.length === 1;
       }
   setMensajeValidacion(ok ? "✅ Correcto" : "❌ Selección incorrecta");
-  if (!ok) setIntentosFallidos(prev => prev + 1);
+  if (ok) setAciertos(prev => prev + 1);
+  else setIntentosFallidos(prev => prev + 1);
   return ok;
     }
 
@@ -294,7 +485,8 @@ export default function Juego() {
     if (esUn || tipo || color || tamaño) {
   const ok = seleccionFiguras.length === 1 && candidatos.some(c => c.id === seleccionFiguras[0].id);
   setMensajeValidacion(ok ? "✅ Correcto" : "❌ Selección incorrecta");
-  if (!ok) setIntentosFallidos(prev => prev + 1);
+  if (ok) setAciertos(prev => prev + 1);
+  else setIntentosFallidos(prev => prev + 1);
   return ok;
     }
 
@@ -410,7 +602,8 @@ export default function Juego() {
         setFeedbackTipo("exito");
         setTimeout(() => {
           setFeedbackTipo(null);
-          setIndicacion(getIndicacionAleatoriaValida(faseIdx, figurasEscenario as any));
+        // Al cambiar de fase, reiniciar el índice de indicación y limpiar estados
+        setIndicacionIdx(0);
           setSeleccion([]);
         }, 800);
       }
@@ -426,7 +619,7 @@ export default function Juego() {
         if (cond.size === 0) {
           setMensajeValidacion("ℹ No aplica");
           setTimeout(() => {
-            setIndicacion(getIndicacionAleatoriaValida(faseIdx, figurasEscenario as any));
+            // Ya no se usa setIndicacion, el avance de indicacion se controla con setIndicacionIdx y setFaseIdx
             setSeleccion([]);
           }, 600);
           return;
@@ -447,7 +640,13 @@ export default function Juego() {
             setFeedbackTipo("exito");
             setTimeout(() => {
               setFeedbackTipo(null);
-              setIndicacion(getIndicacionAleatoriaValida(faseIdx, figurasEscenario as any));
+              // Avanzar a la siguiente indicación o fase
+              if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+                setFaseIdx(prev => prev + 1);
+                setIndicacionIdx(0);
+              } else {
+                setIndicacionIdx(prev => prev + 1);
+              }
               setSeleccion([]);
             }, 800);
           } else {
@@ -504,7 +703,14 @@ export default function Juego() {
       // Avanzar automáticamente a la siguiente indicación
       setTimeout(() => {
         setFeedbackTipo(null);
-        setIndicacion(getIndicacionAleatoriaValida(faseIdx, figurasEscenario as any));
+        // Avanzar a la siguiente indicación o fase
+        if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+          // Si es la última indicación de la fase, pasar a la siguiente fase
+          setFaseIdx(prev => prev + 1);
+          setIndicacionIdx(0);
+        } else {
+          setIndicacionIdx(prev => prev + 1);
+        }
         setSeleccion([]);
       }, 800);
     };
@@ -731,7 +937,8 @@ export default function Juego() {
       if (has) return prev.filter(x => x !== id);
       const t = indicacion?.texto.toLowerCase() || "";
       const esTodosMenos = t.includes("menos");
-      if (!esTodosMenos && expectedLimit != null && prev.length >= expectedLimit) {
+      const esMixtaVelocidad = t.includes("cuadrados") && t.includes("lenta") && t.includes("circulos") && t.includes("rápid");
+      if (!esTodosMenos && !esMixtaVelocidad && expectedLimit != null && prev.length >= expectedLimit) {
         // no permitir más de N selecciones
         setMensajeValidacion(`Límite de selección: ${expectedLimit}`);
         setFeedbackTipo("error");
@@ -922,7 +1129,10 @@ export default function Juego() {
         if (incluyeSobre) {
           // Agrupar solo en consignas "sobre"
           nuevosEmparejados[fid] = newZ;
-          setEmparejados(nuevosEmparejados);
+    // Solo contar como acierto si es un emparejamiento nuevo y correcto
+    const eraNuevo = !emparejados[fid];
+    setEmparejados(nuevosEmparejados);
+    if (eraNuevo && coincideExacto) setAciertos(prev => prev + 1);
           setZoneOrder(prev => {
             const updated: Record<string, string[]> = {};
             for (const [z, arr] of Object.entries(prev)) {
@@ -944,7 +1154,10 @@ export default function Juego() {
             }
           }
           nuevosEmparejados[fid] = newZ;
+          // Solo contar como acierto si es un emparejamiento nuevo y correcto
+          const eraNuevo = !emparejados[fid];
           setEmparejados(nuevosEmparejados);
+          if (eraNuevo && coincideExacto) setAciertos(prev => prev + 1);
           // actualizar órdenes (una figura por zona)
           setZoneOrder(prev => {
             const updated: Record<string, string[]> = { ...prev };
@@ -1000,15 +1213,18 @@ export default function Juego() {
                 const c1 = zoneCenters[zona1];
                 const c2 = zoneCenters[zona2];
                 const dist = Math.hypot(c1.x - c2.x, c1.y - c2.y);
-                // Umbral: al menos 1.5 veces el ancho de una zona grande como referencia
-                const threshold = Math.max(c1.width, c2.width) * 1.5;
+                // Umbral: al menos 1.2 veces el ancho de una zona grande como referencia (más flexible)
+                const threshold = Math.max(c1.width, c2.width) * 1.2;
+                console.log(`[VALIDACION-LEJOS] Distancia: ${dist.toFixed(2)}, Umbral: ${threshold.toFixed(2)}`);
                 if (dist >= threshold) {
                   logValidacion(true, "lejos");
                   setFeedbackTipo("exito");
-                  setTimeout(() => setFeedbackTipo(null), 800);
-                  // preparar siguiente indicación factible
-                  setIndicacion(getIndicacionAleatoriaValida(faseIdx, figurasEscenario as any));
-                  setSeleccion([]);
+                  setTimeout(() => {
+                    setFeedbackTipo(null);
+                    // Avanzar a la siguiente indicación (sin cambiar de fase)
+                    setIndicacionIdx(prev => prev + 1);
+                    setSeleccion([]);
+                  }, 800);
                 } else {
                   logValidacion(false, "lejos");
                   setFeedbackTipo("error");
@@ -1035,9 +1251,17 @@ export default function Juego() {
                 if (dist <= threshold) {
                   logValidacion(true, "junto");
                   setFeedbackTipo("exito");
-                  setTimeout(() => setFeedbackTipo(null), 800);
-                  setIndicacion(getIndicacionAleatoriaValida(faseIdx, figurasEscenario as any));
-                  setSeleccion([]);
+                  setTimeout(() => {
+                    setFeedbackTipo(null);
+                    // Avanzar a la siguiente indicación o fase
+                    if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+                      setFaseIdx(prev => prev + 1);
+                      setIndicacionIdx(0);
+                    } else {
+                      setIndicacionIdx(prev => prev + 1);
+                    }
+                    setSeleccion([]);
+                  }, 800);
                 } else {
                   logValidacion(false, "junto");
                   setFeedbackTipo("error");
@@ -1060,9 +1284,17 @@ export default function Juego() {
                 if (zona1 === zona2) {
                   logValidacion(true, "sobre");
                   setFeedbackTipo("exito");
-                  setTimeout(() => setFeedbackTipo(null), 800);
-                  setIndicacion(getIndicacionAleatoriaValida(faseIdx, figurasEscenario as any));
-                  setSeleccion([]);
+                  setTimeout(() => {
+                    setFeedbackTipo(null);
+                    // Avanzar a la siguiente indicación o fase
+                    if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+                      setFaseIdx(prev => prev + 1);
+                      setIndicacionIdx(0);
+                    } else {
+                      setIndicacionIdx(prev => prev + 1);
+                    }
+                    setSeleccion([]);
+                  }, 800);
                 } else {
                   logValidacion(false, "sobre");
                   setFeedbackTipo("error");
@@ -1120,7 +1352,7 @@ export default function Juego() {
                     logValidacion(true, "entre (vecinos)");
                     setFeedbackTipo("exito");
                     setTimeout(() => setFeedbackTipo(null), 800);
-                    setIndicacion(getIndicacionAleatoriaValida(faseIdx, figurasEscenario as any));
+                    // Ya no se usa setIndicacion
                     setSeleccion([]);
                     validated = true;
                   } else {
@@ -1155,9 +1387,17 @@ export default function Juego() {
           if (withinSegment && closeToLine && between) {
                     logValidacion(true, "entre");
                     setFeedbackTipo("exito");
-                    setTimeout(() => setFeedbackTipo(null), 800);
-                    setIndicacion(getIndicacionAleatoriaValida(faseIdx, figurasEscenario as any));
-                    setSeleccion([]);
+                    setTimeout(() => {
+                      setFeedbackTipo(null);
+                      // Avanzar a la siguiente indicación o fase
+                      if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+                        setFaseIdx(prev => prev + 1);
+                        setIndicacionIdx(0);
+                      } else {
+                        setIndicacionIdx(prev => prev + 1);
+                      }
+                      setSeleccion([]);
+                    }, 800);
                   } else {
                     // En consignas "entre" no notificamos error cuando aún no se cumple;
                     // permitimos que el usuario siga intercambiando hasta lograrlo.
@@ -1199,7 +1439,7 @@ export default function Juego() {
             <span className="text-red-600 font-semibold">❌ {intentosFallidos}</span>
           </div>
           <div className="bg-white px-2 py-1 rounded shadow text-xs sm:text-sm">
-            <span className="text-green-600 font-semibold">✅ {Object.keys(emparejados).length}/{figurasEscenario.length}</span>
+            <span className="text-green-600 font-semibold">✅ {aciertos}/{fasesTest[faseIdx]?.indicaciones.length}</span>
           </div>
         </div>
         {/* Centro: indicación visible */}
@@ -1208,7 +1448,16 @@ export default function Juego() {
           <span className="font-medium text-center text-black max-w-[92vw] md:max-w-none break-words leading-snug text-sm">{indicacion?.texto}</span>
           <button
             className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs sm:text-sm"
-            onClick={() => { setIndicacion(getIndicacionAleatoriaValida(faseIdx, figurasEscenario as any)); setSeleccion([]); }}
+            onClick={() => {
+              setSeleccion([]);
+              setFiguras(shuffleNoRepeatColor(figurasBase));
+              // Seleccionar una indicación aleatoria NO repetida de la fase actual
+              const fase = fasesTest[faseIdx];
+              if (fase && fase.indicaciones.length > 0) {
+                const idx = getNoRepeatIndicacion();
+                setIndicacionIdx(idx);
+              }
+            }}
           >Aleatoria</button>
         </div>
         {/* Derecha: fase/escenario y acciones */}
@@ -1248,68 +1497,18 @@ export default function Juego() {
         {/* Zonas organizadas en dos filas (filtradas por escenario) - visibles solo para consignas de movimiento */}
         {showDropZones && (
         <div className="flex flex-col items-center mb-2 sm:mb-4 flex-shrink-0 px-1" data-no-dnd="true">
-          {/* Fila superior - Figuras grandes */}
+          {/* Fila 1: Círculos grandes */}
           <div className="flex justify-center flex-wrap mb-2 gap-1" data-no-dnd="true">
-    {zonasEscenario.filter(zona => zona.tamaño === "grande").map((zona) => {
-              const figuraEmparejadaId = Object.keys(emparejados).find(
-                figuraId => emparejados[figuraId] === zona.id
-              );
-              const figuraColocada = figuraEmparejadaId 
-                ? figurasEscenario.find(f => f.id === figuraEmparejadaId)
-                : undefined;
-
-        return (
-                <DropZona 
-                  key={zona.id} 
-                  id={zona.id} 
-                  tipo={zona.tipo}
-                  figuraEjemplo={{
-                    tipo: zona.tipo,
-                    color: zona.color,
-                    tamaño: zona.tamaño
-                  }}
-                  figuraColocada={figuraColocada ? {
-                    id: figuraColocada.id,
-                    tipo: figuraColocada.tipo,
-                    color: figuraColocada.color,
-                    tamaño: figuraColocada.tamaño
-          } : undefined}
-                  onMeasure={handleZoneMeasure}
-                  figurasColocadas={figurasPorZona[zona.id]}
-                  overlayMode={overlayMode}
-                  orderIds={zoneOrder[zona.id]}
-                  draggingId={draggingId || undefined}
-                />
-              );
-            })}
-          </div>
-          
-          {/* Fila inferior - Figuras pequeñas */}
-          <div className="flex justify-center flex-wrap gap-1" data-no-dnd="true">
-    {zonasEscenario.filter(zona => zona.tamaño === "pequeño").map((zona) => {
-              const figuraEmparejadaId = Object.keys(emparejados).find(
-                figuraId => emparejados[figuraId] === zona.id
-              );
-              const figuraColocada = figuraEmparejadaId 
-                ? figurasEscenario.find(f => f.id === figuraEmparejadaId)
-                : undefined;
-
+            {zonasEscenario.filter(z => z.tamaño === "grande" && z.tipo === "circulo").slice(0,5).map(zona => {
+              const figuraEmparejadaId = Object.keys(emparejados).find(figuraId => emparejados[figuraId] === zona.id);
+              const figuraColocada = figuraEmparejadaId ? figurasEscenario.find(f => f.id === figuraEmparejadaId) : undefined;
               return (
-                <DropZona 
-                  key={zona.id} 
-                  id={zona.id} 
+                <DropZona
+                  key={zona.id}
+                  id={zona.id}
                   tipo={zona.tipo}
-                  figuraEjemplo={{
-                    tipo: zona.tipo,
-                    color: zona.color,
-                    tamaño: zona.tamaño
-                  }}
-                  figuraColocada={figuraColocada ? {
-                    id: figuraColocada.id,
-                    tipo: figuraColocada.tipo,
-                    color: figuraColocada.color,
-                    tamaño: figuraColocada.tamaño
-      } : undefined}
+                  figuraEjemplo={{ tipo: zona.tipo, color: zona.color, tamaño: zona.tamaño }}
+                  figuraColocada={figuraColocada ? { id: figuraColocada.id, tipo: figuraColocada.tipo, color: figuraColocada.color, tamaño: figuraColocada.tamaño } : undefined}
                   onMeasure={handleZoneMeasure}
                   figurasColocadas={figurasPorZona[zona.id]}
                   overlayMode={overlayMode}
@@ -1319,25 +1518,115 @@ export default function Juego() {
               );
             })}
           </div>
+          {/* Fila 2: Cuadros grandes */}
+          <div className="flex justify-center flex-wrap mb-2 gap-1" data-no-dnd="true">
+            {zonasEscenario.filter(z => z.tamaño === "grande" && z.tipo === "cuadro").slice(0,5).map(zona => {
+              const figuraEmparejadaId = Object.keys(emparejados).find(figuraId => emparejados[figuraId] === zona.id);
+              const figuraColocada = figuraEmparejadaId ? figurasEscenario.find(f => f.id === figuraEmparejadaId) : undefined;
+              return (
+                <DropZona
+                  key={zona.id}
+                  id={zona.id}
+                  tipo={zona.tipo}
+                  figuraEjemplo={{ tipo: zona.tipo, color: zona.color, tamaño: zona.tamaño }}
+                  figuraColocada={figuraColocada ? { id: figuraColocada.id, tipo: figuraColocada.tipo, color: figuraColocada.color, tamaño: figuraColocada.tamaño } : undefined}
+                  onMeasure={handleZoneMeasure}
+                  figurasColocadas={figurasPorZona[zona.id]}
+                  overlayMode={overlayMode}
+                  orderIds={zoneOrder[zona.id]}
+                  draggingId={draggingId || undefined}
+                />
+              );
+            })}
+          </div>
+          {/* Fila 3: Círculos pequeños (oculta si no hay) */}
+          {zonasEscenario.some(z => z.tamaño === "pequeño" && z.tipo === "circulo") && (
+            <div className="flex justify-center flex-wrap mb-2 gap-1" data-no-dnd="true">
+              {zonasEscenario.filter(z => z.tamaño === "pequeño" && z.tipo === "circulo").slice(0,5).map(zona => {
+                const figuraEmparejadaId = Object.keys(emparejados).find(figuraId => emparejados[figuraId] === zona.id);
+                const figuraColocada = figuraEmparejadaId ? figurasEscenario.find(f => f.id === figuraEmparejadaId) : undefined;
+                return (
+                  <DropZona
+                    key={zona.id}
+                    id={zona.id}
+                    tipo={zona.tipo}
+                    figuraEjemplo={{ tipo: zona.tipo, color: zona.color, tamaño: zona.tamaño }}
+                    figuraColocada={figuraColocada ? { id: figuraColocada.id, tipo: figuraColocada.tipo, color: figuraColocada.color, tamaño: figuraColocada.tamaño } : undefined}
+                    onMeasure={handleZoneMeasure}
+                    figurasColocadas={figurasPorZona[zona.id]}
+                    overlayMode={overlayMode}
+                    orderIds={zoneOrder[zona.id]}
+                    draggingId={draggingId || undefined}
+                  />
+                );
+              })}
+            </div>
+          )}
+          {/* Fila 4: Cuadros pequeños (oculta si no hay) */}
+          {zonasEscenario.some(z => z.tamaño === "pequeño" && z.tipo === "cuadro") && (
+            <div className="flex justify-center flex-wrap gap-1" data-no-dnd="true">
+              {zonasEscenario.filter(z => z.tamaño === "pequeño" && z.tipo === "cuadro").slice(0,5).map(zona => {
+                const figuraEmparejadaId = Object.keys(emparejados).find(figuraId => emparejados[figuraId] === zona.id);
+                const figuraColocada = figuraEmparejadaId ? figurasEscenario.find(f => f.id === figuraEmparejadaId) : undefined;
+                return (
+                  <DropZona
+                    key={zona.id}
+                    id={zona.id}
+                    tipo={zona.tipo}
+                    figuraEjemplo={{ tipo: zona.tipo, color: zona.color, tamaño: zona.tamaño }}
+                    figuraColocada={figuraColocada ? { id: figuraColocada.id, tipo: figuraColocada.tipo, color: figuraColocada.color, tamaño: figuraColocada.tamaño } : undefined}
+                    onMeasure={handleZoneMeasure}
+                    figurasColocadas={figurasPorZona[zona.id]}
+                    overlayMode={overlayMode}
+                    orderIds={zoneOrder[zona.id]}
+                    draggingId={draggingId || undefined}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
         )}
 
     {/* Área de figuras disponibles organizadas por tamaño (filtradas por escenario) */}
         <div className="flex flex-col items-center flex-1 justify-start overflow-auto pb-16" data-no-dnd="true">
           <div className="flex flex-col items-center gap-2 w-full px-1" data-no-dnd="true">
-            {/* Figuras grandes */}
+            {/* Fila 1: Círculos grandes */}
             <div className="flex flex-wrap justify-center gap-1" data-no-dnd="true">
-              {figurasEscenario.filter(item => item.tamaño === "grande" && !emparejados[item.id]).map((item) => (
-                <DraggableFigura key={item.id} {...item} onSelect={handleSelect} selected={seleccion.includes(item.id)} />
-              ))}
+              {figurasEscenario.filter(item => item.tamaño === "grande" && item.tipo === "circulo" && !emparejados[item.id])
+                .slice(0,5)
+                .map((item) => (
+                  <DraggableFigura key={item.id} {...item} onSelect={handleSelect} selected={seleccion.includes(item.id)} />
+                ))}
             </div>
-            
-            {/* Figuras pequeñas */}
+            {/* Fila 2: Cuadros grandes */}
             <div className="flex flex-wrap justify-center gap-1" data-no-dnd="true">
-              {figurasEscenario.filter(item => item.tamaño === "pequeño" && !emparejados[item.id]).map((item) => (
-                <DraggableFigura key={item.id} {...item} onSelect={handleSelect} selected={seleccion.includes(item.id)} />
-              ))}
+              {figurasEscenario.filter(item => item.tamaño === "grande" && item.tipo === "cuadro" && !emparejados[item.id])
+                .slice(0,5)
+                .map((item) => (
+                  <DraggableFigura key={item.id} {...item} onSelect={handleSelect} selected={seleccion.includes(item.id)} />
+                ))}
             </div>
+            {/* Fila 3: Círculos pequeños (oculta si escenario es sin-pequeñas) */}
+            {faseActual?.escenario !== "sin-pequeñas" && (
+              <div className="flex flex-wrap justify-center gap-1" data-no-dnd="true">
+                {figurasEscenario.filter(item => item.tamaño === "pequeño" && item.tipo === "circulo" && !emparejados[item.id])
+                  .slice(0,5)
+                  .map((item) => (
+                    <DraggableFigura key={item.id} {...item} onSelect={handleSelect} selected={seleccion.includes(item.id)} />
+                  ))}
+              </div>
+            )}
+            {/* Fila 4: Cuadros pequeños (oculta si escenario es sin-pequeñas) */}
+            {faseActual?.escenario !== "sin-pequeñas" && (
+              <div className="flex flex-wrap justify-center gap-1" data-no-dnd="true">
+                {figurasEscenario.filter(item => item.tamaño === "pequeño" && item.tipo === "cuadro" && !emparejados[item.id])
+                  .slice(0,5)
+                  .map((item) => (
+                    <DraggableFigura key={item.id} {...item} onSelect={handleSelect} selected={seleccion.includes(item.id)} />
+                  ))}
+              </div>
+            )}
           </div>
         </div>
         {/* Drag overlay para evitar clipping mientras se arrastra */}

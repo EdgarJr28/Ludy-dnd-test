@@ -77,7 +77,7 @@ export const fasesTest: FaseTest[] = [
       "Señale el circulo negro y el cuadrado rojo",
       "Señale el circulo negro o el cuadrado rojo",
       "Coloque el cuadrado verde lejos del cuadrado amarillo",
-      "Si hay un circulo azul señale el cuadrado rojo",
+      "Si hay un circulo blanco señale el cuadrado rojo",
       "Coloque el cuadrado verde junto al circulo amarillo",
       "Señale todos los cuadrados lentamente y los circulos rápidamente",
       "Coloque el circulo rojo entre el cuadrado amarillo y el cuadrado verde",
@@ -92,7 +92,9 @@ export const fasesTest: FaseTest[] = [
 export const getIndicacionAleatoria = (faseIdx: number) => {
   const fase = fasesTest[faseIdx];
   if (!fase) return "" as any;
-  const idx = Math.floor(Math.random() * fase.indicaciones.length);
+  const total = fase.indicaciones.length;
+  if (total === 0) return { texto: "", idx: -1 };
+  const idx = Math.floor(Math.random() * total);
   return { texto: fase.indicaciones[idx], idx };
 };
 
@@ -248,15 +250,12 @@ export function esIndicacionFactible(indicacion: string, figuras: FiguraData[]):
   return figuras.some((f) => filtrar(f, a.partes[0]!));
 }
 
-export const getIndicacionAleatoriaValida = (faseIdx: number, figurasEscenario: FiguraData[]) => {
+// Ahora getIndicacionAleatoriaValida solo retorna una indicación aleatoria de la fase, sin filtrar por factibilidad
+export const getIndicacionAleatoriaValida = (faseIdx: number) => {
   const fase = fasesTest[faseIdx];
-  if (!fase) return "" as any;
-  const disponibles = fase.indicaciones.filter((txt) => esIndicacionFactible(txt, figurasEscenario));
-  if (disponibles.length === 0) {
-    // fallback: retornar cualquiera, pero marcado
-    const idx = Math.floor(Math.random() * fase.indicaciones.length);
-    return { texto: fase.indicaciones[idx] + " (no factible)", idx, noFactible: true } as any;
-  }
-  const idx = Math.floor(Math.random() * disponibles.length);
-  return { texto: disponibles[idx], idx } as any;
+  if (!fase) return { texto: "", idx: -1 };
+  const total = fase.indicaciones.length;
+  if (total === 0) return { texto: "", idx: -1 };
+  const idx = Math.floor(Math.random() * total);
+  return { texto: fase.indicaciones[idx], idx };
 };
