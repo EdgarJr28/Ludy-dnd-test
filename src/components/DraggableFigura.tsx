@@ -8,6 +8,8 @@ interface Props {
   tipo: string;
   color: string;
   tamaño?: string;
+  onSelect?: (id: string) => void;
+  selected?: boolean;
 }
 
 const colorMap: Record<string, string> = {
@@ -15,9 +17,11 @@ const colorMap: Record<string, string> = {
   blue: "bg-blue-500",
   green: "bg-green-500",
   yellow: "bg-yellow-400",
+  white: "bg-white border border-gray-300",
+  black: "bg-black",
 };
 
-export default function DraggableFigura({ id, tipo, color, tamaño }: Props) {
+export default function DraggableFigura({ id, tipo, color, tamaño, onSelect, selected }: Props) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id,
   });
@@ -40,11 +44,16 @@ export default function DraggableFigura({ id, tipo, color, tamaño }: Props) {
       style={style}
       {...listeners}
       {...attributes}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect?.(id);
+      }}
       className={clsx(
         sizeClass,
         "m-1",
         colorMap[color],
-        figuraEstilo
+        figuraEstilo,
+        selected ? "ring-4 ring-indigo-400" : ""
       )}
     />
   );
