@@ -38,7 +38,6 @@ export default function Juego() {
   // Emparejados es la fuente de verdad, pero cada vez que se agregue un nuevo emparejamiento correcto, también incrementamos aciertos
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [aciertos, setAciertos] = useState(0);
-  const [juegoCompletado, setJuegoCompletado] = useState(false);
   const [faseIdx, setFaseIdx] = useState(0);
   // Hook para evitar repetición de preguntas en la fase actual (debe ir después de faseIdx)
   const getNoRepeatIndicacion = useRandomNoRepeatIndicacion(
@@ -112,6 +111,8 @@ export default function Juego() {
 
   const sensors = useSensors(pointerSensor, touchSensor);
 
+  const escenarioRef = React.useRef<HTMLDivElement>(null);
+
   // Logger unificado de validación para la consola
   const logValidacion = useCallback(
     (ok: boolean, detalle?: string) => {
@@ -131,7 +132,6 @@ export default function Juego() {
     setZonas(shuffleArray(figurasMeta));
     setEmparejados({});
     setIntentosFallidos(0);
-    setJuegoCompletado(false);
   }, []);
 
   // Función para reiniciar el juego
@@ -139,9 +139,9 @@ export default function Juego() {
     setFiguras(figurasBase);
     setZonas(figurasMeta);
     setEmparejados({});
+    setFiguras(shuffleNoRepeatColor(figurasBase));
     setAciertos(0);
     setIntentosFallidos(0);
-    setJuegoCompletado(false);
     setFaseIdx(0);
     // Ya no se usa setIndicacion
   }, []);
@@ -188,6 +188,32 @@ export default function Juego() {
     return map;
   }, [emparejados, figurasEscenario]);
 
+  // Ajustar escala del escenario
+  React.useEffect(() => {
+    function ajustarEscala() {
+      const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+      const isMobile = window.innerWidth <= 900;
+      if (isLandscape && isMobile && escenarioRef.current) {
+        const cont = escenarioRef.current;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const rect = cont.getBoundingClientRect();
+        const escalaW = vw / rect.width;
+        const escalaH = vh / rect.height;
+        const escala = Math.min(escalaW, escalaH, 1);
+        document.documentElement.style.setProperty(
+          "--escala-escenario",
+          escala.toString()
+        );
+      } else {
+        document.documentElement.style.setProperty("--escala-escenario", "1");
+      }
+    }
+    ajustarEscala();
+    window.addEventListener("resize", ajustarEscala);
+    return () => window.removeEventListener("resize", ajustarEscala);
+  }, []);
+
   // Inicializar indicación si falta
   React.useEffect(() => {
     setTiempoInicioCuad(null);
@@ -197,7 +223,6 @@ export default function Juego() {
     setEmparejados({});
     setZoneOrder({});
     setIntentosFallidos(0);
-    setJuegoCompletado(false);
     setSeleccion([]);
     setMensajeValidacion(null);
     setAciertos(0);
@@ -1141,11 +1166,6 @@ export default function Juego() {
             return updated;
           });
         }
-
-        // Verificar si el juego está completado
-        if (Object.keys(nuevosEmparejados).length === figurasBase.length) {
-          setJuegoCompletado(true);
-        }
         // Remover el feedback de éxito individual
 
         /*   console.log("✅ Emparejamiento exitoso:", { 
@@ -1485,224 +1505,111 @@ export default function Juego() {
   };
 
   return (
-    <main className="h-screen w-screen bg-gray-100 flex flex-col p-2 sm:p-4 overflow-hidden">
-      {/* Header con estadísticas, indicación centrada y controles */}
-      <div className="grid grid-cols-1 md:grid-cols-3 items-start md:items-center gap-2 mb-3 flex-shrink-0">
-        {/* Izquierda: título y stats */}
-        <div className="order-2 md:order-1 flex flex-wrap gap-2 items-center justify-center md:justify-start">
-          <h2 className="text-base sm:text-lg font-bold">
-            Empareja las figuras
-          </h2>
-          <div className="bg-white px-2 py-1 rounded shadow text-xs sm:text-sm">
-            <span className="text-red-600 font-semibold">
-              ❌ {intentosFallidos}
-            </span>
+    <main className="h-screen w-screen bg-gray-100 flex flex-col p-2 sm:p-4 overflow-hidden escenario-sin-scroll">
+      <div ref={escenarioRef} style={{ width: "100%", height: "100%" }}>
+        {/* Header con estadísticas, indicación centrada y controles */}
+        <div className="grid grid-cols-1 md:grid-cols-3 items-start md:items-center gap-2 mb-3 flex-shrink-0">
+          {/* Izquierda: título y stats */}
+          <div className="order-2 md:order-1 flex flex-wrap gap-2 items-center justify-center md:justify-start">
+            <h2 className="text-base sm:text-lg font-bold">
+              Empareja las figuras
+            </h2>
+            <div className="bg-white px-2 py-1 rounded shadow text-xs sm:text-sm">
+              <span className="text-red-600 font-semibold">
+                ❌ {intentosFallidos}
+              </span>
+            </div>
+            <div className="bg-white px-2 py-1 rounded shadow text-xs sm:text-sm">
+              <span className="text-green-600 font-semibold">
+                ✅ {aciertos}/{fasesTest[faseIdx]?.indicaciones.length}
+              </span>
+            </div>
           </div>
-          <div className="bg-white px-2 py-1 rounded shadow text-xs sm:text-sm">
-            <span className="text-green-600 font-semibold">
-              ✅ {aciertos}/{fasesTest[faseIdx]?.indicaciones.length}
+          {/* Centro: indicación visible */}
+          <div className="order-1 md:order-2 flex items-center justify-center gap-2 flex-wrap px-2">
+            <span className="text-xs sm:text-sm text-gray-500">
+              Indicación:
             </span>
+            <span className="font-medium text-center text-black max-w-[92vw] md:max-w-none break-words leading-snug text-sm">
+              {indicacion?.texto}
+            </span>
+            <button
+              className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs sm:text-sm"
+              onClick={() => {
+                setSeleccion([]);
+                setFiguras(shuffleNoRepeatColor(figurasBase));
+                // Seleccionar una indicación aleatoria NO repetida de la fase actual
+                const fase = fasesTest[faseIdx];
+                if (fase && fase.indicaciones.length > 0) {
+                  const idx = getNoRepeatIndicacion();
+                  setIndicacionIdx(idx);
+                }
+              }}
+            >
+              Aleatoria
+            </button>
           </div>
-        </div>
-        {/* Centro: indicación visible */}
-        <div className="order-1 md:order-2 flex items-center justify-center gap-2 flex-wrap px-2">
-          <span className="text-xs sm:text-sm text-gray-500">Indicación:</span>
-          <span className="font-medium text-center text-black max-w-[92vw] md:max-w-none break-words leading-snug text-sm">
-            {indicacion?.texto}
-          </span>
-          <button
-            className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs sm:text-sm"
-            onClick={() => {
-              setSeleccion([]);
-              setFiguras(shuffleNoRepeatColor(figurasBase));
-              // Seleccionar una indicación aleatoria NO repetida de la fase actual
-              const fase = fasesTest[faseIdx];
-              if (fase && fase.indicaciones.length > 0) {
-                const idx = getNoRepeatIndicacion();
-                setIndicacionIdx(idx);
+          {/* Derecha: fase/escenario y acciones */}
+          <div className="order-3 flex flex-wrap gap-2 items-center justify-center md:justify-end">
+            <span className="text-xs sm:text-sm text-gray-500">Fase</span>
+            <button
+              className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50 text-xs sm:text-sm"
+              onClick={() => setFaseIdx((i) => Math.max(0, i - 1))}
+              disabled={faseIdx === 0}
+            >
+              ◀
+            </button>
+            <span className="font-semibold text-xs sm:text-sm">
+              {faseIdx + 1} / {fasesTest.length}
+            </span>
+            <button
+              className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50 text-xs sm:text-sm"
+              onClick={() =>
+                setFaseIdx((i) => Math.min(fasesTest.length - 1, i + 1))
               }
-            }}
-          >
-            Aleatoria
-          </button>
+              disabled={faseIdx === fasesTest.length - 1}
+            >
+              ▶
+            </button>
+            <span className="ml-0 md:ml-2 text-[11px] sm:text-xs px-2 py-1 rounded bg-amber-50 text-amber-700 whitespace-nowrap">
+              {faseActual?.escenario === "todas"
+                ? "todas las fichas"
+                : "sin pequeñas"}
+            </span>
+            <button
+              onClick={mezclarJuego}
+              className="ml-0 md:ml-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs sm:text-sm font-semibold transition-colors"
+            >
+              🔀 Mezclar
+            </button>
+            <button
+              onClick={reiniciarJuego}
+              className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs sm:text-sm font-semibold transition-colors"
+            >
+              🔄 Reiniciar
+            </button>
+          </div>
         </div>
-        {/* Derecha: fase/escenario y acciones */}
-        <div className="order-3 flex flex-wrap gap-2 items-center justify-center md:justify-end">
-          <span className="text-xs sm:text-sm text-gray-500">Fase</span>
-          <button
-            className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50 text-xs sm:text-sm"
-            onClick={() => setFaseIdx((i) => Math.max(0, i - 1))}
-            disabled={faseIdx === 0}
-          >
-            ◀
-          </button>
-          <span className="font-semibold text-xs sm:text-sm">
-            {faseIdx + 1} / {fasesTest.length}
-          </span>
-          <button
-            className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50 text-xs sm:text-sm"
-            onClick={() =>
-              setFaseIdx((i) => Math.min(fasesTest.length - 1, i + 1))
-            }
-            disabled={faseIdx === fasesTest.length - 1}
-          >
-            ▶
-          </button>
-          <span className="ml-0 md:ml-2 text-[11px] sm:text-xs px-2 py-1 rounded bg-amber-50 text-amber-700 whitespace-nowrap">
-            {faseActual?.escenario === "todas"
-              ? "todas las fichas"
-              : "sin pequeñas"}
-          </span>
-          <button
-            onClick={mezclarJuego}
-            className="ml-0 md:ml-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs sm:text-sm font-semibold transition-colors"
-            disabled={juegoCompletado}
-          >
-            🔀 Mezclar
-          </button>
-          <button
-            onClick={reiniciarJuego}
-            className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs sm:text-sm font-semibold transition-colors"
-          >
-            🔄 Reiniciar
-          </button>
-        </div>
-      </div>
-
-      {/* Mensaje de validación textual */}
-      {mensajeValidacion && (
-        <div
-          style={{
-            margin: "16px 0",
-            padding: "10px 18px",
-            background: "#fffbe6",
-            color: "#b8860b",
-            border: "1px solid #ffe58f",
-            borderRadius: 8,
-            fontWeight: 500,
-            fontSize: 18,
-            textAlign: "center",
-            maxWidth: 480,
-            marginLeft: "auto",
-            marginRight: "auto",
-            boxShadow: "0 2px 8px #0001",
-          }}
+        <DndContext
+          collisionDetection={rectIntersection}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          sensors={sensors}
         >
-          {mensajeValidacion}
-        </div>
-      )}
-
-      <DndContext
-        collisionDetection={rectIntersection}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-        sensors={sensors}
-      >
-        {/* Zonas organizadas en dos filas (filtradas por escenario) - visibles solo para consignas de movimiento */}
-        {showDropZones && (
-          <div
-            className="flex flex-col items-center mb-2 sm:mb-4 flex-shrink-0 px-1"
-            data-no-dnd="true"
-          >
-            {/* Fila 1: Círculos grandes */}
+          {/* Zonas organizadas en dos filas (filtradas por escenario) - visibles solo para consignas de movimiento */}
+          {showDropZones && (
             <div
-              className="flex justify-center flex-wrap mb-2 gap-1"
+              className="flex flex-col items-center mb-2 sm:mb-4 flex-shrink-0 px-1"
               data-no-dnd="true"
             >
-              {zonasEscenario
-                .filter((z) => z.tamaño === "grande" && z.tipo === "circulo")
-                .slice(0, 5)
-                .map((zona) => {
-                  const figuraEmparejadaId = Object.keys(emparejados).find(
-                    (figuraId) => emparejados[figuraId] === zona.id
-                  );
-                  const figuraColocada = figuraEmparejadaId
-                    ? figurasEscenario.find((f) => f.id === figuraEmparejadaId)
-                    : undefined;
-                  return (
-                    <DropZona
-                      key={zona.id}
-                      id={zona.id}
-                      tipo={zona.tipo}
-                      figuraEjemplo={{
-                        tipo: zona.tipo,
-                        color: zona.color,
-                        tamaño: zona.tamaño,
-                      }}
-                      figuraColocada={
-                        figuraColocada
-                          ? {
-                              id: figuraColocada.id,
-                              tipo: figuraColocada.tipo,
-                              color: figuraColocada.color,
-                              tamaño: figuraColocada.tamaño,
-                            }
-                          : undefined
-                      }
-                      onMeasure={handleZoneMeasure}
-                      figurasColocadas={figurasPorZona[zona.id]}
-                      overlayMode={overlayMode}
-                      orderIds={zoneOrder[zona.id]}
-                      draggingId={draggingId || undefined}
-                    />
-                  );
-                })}
-            </div>
-            {/* Fila 2: Cuadros grandes */}
-            <div
-              className="flex justify-center flex-wrap mb-2 gap-1"
-              data-no-dnd="true"
-            >
-              {zonasEscenario
-                .filter((z) => z.tamaño === "grande" && z.tipo === "cuadro")
-                .slice(0, 5)
-                .map((zona) => {
-                  const figuraEmparejadaId = Object.keys(emparejados).find(
-                    (figuraId) => emparejados[figuraId] === zona.id
-                  );
-                  const figuraColocada = figuraEmparejadaId
-                    ? figurasEscenario.find((f) => f.id === figuraEmparejadaId)
-                    : undefined;
-                  return (
-                    <DropZona
-                      key={zona.id}
-                      id={zona.id}
-                      tipo={zona.tipo}
-                      figuraEjemplo={{
-                        tipo: zona.tipo,
-                        color: zona.color,
-                        tamaño: zona.tamaño,
-                      }}
-                      figuraColocada={
-                        figuraColocada
-                          ? {
-                              id: figuraColocada.id,
-                              tipo: figuraColocada.tipo,
-                              color: figuraColocada.color,
-                              tamaño: figuraColocada.tamaño,
-                            }
-                          : undefined
-                      }
-                      onMeasure={handleZoneMeasure}
-                      figurasColocadas={figurasPorZona[zona.id]}
-                      overlayMode={overlayMode}
-                      orderIds={zoneOrder[zona.id]}
-                      draggingId={draggingId || undefined}
-                    />
-                  );
-                })}
-            </div>
-            {/* Fila 3: Círculos pequeños (oculta si no hay) */}
-            {zonasEscenario.some(
-              (z) => z.tamaño === "pequeño" && z.tipo === "circulo"
-            ) && (
+              {/* Fila 1: Círculos grandes */}
               <div
                 className="flex justify-center flex-wrap mb-2 gap-1"
                 data-no-dnd="true"
               >
                 {zonasEscenario
-                  .filter((z) => z.tamaño === "pequeño" && z.tipo === "circulo")
+                  .filter((z) => z.tamaño === "grande" && z.tipo === "circulo")
                   .slice(0, 5)
                   .map((zona) => {
                     const figuraEmparejadaId = Object.keys(emparejados).find(
@@ -1742,17 +1649,13 @@ export default function Juego() {
                     );
                   })}
               </div>
-            )}
-            {/* Fila 4: Cuadros pequeños (oculta si no hay) */}
-            {zonasEscenario.some(
-              (z) => z.tamaño === "pequeño" && z.tipo === "cuadro"
-            ) && (
+              {/* Fila 2: Cuadros grandes */}
               <div
-                className="flex justify-center flex-wrap gap-1"
+                className="flex justify-center flex-wrap mb-2 gap-1"
                 data-no-dnd="true"
               >
                 {zonasEscenario
-                  .filter((z) => z.tamaño === "pequeño" && z.tipo === "cuadro")
+                  .filter((z) => z.tamaño === "grande" && z.tipo === "cuadro")
                   .slice(0, 5)
                   .map((zona) => {
                     const figuraEmparejadaId = Object.keys(emparejados).find(
@@ -1792,65 +1695,123 @@ export default function Juego() {
                     );
                   })}
               </div>
-            )}
-          </div>
-        )}
+              {/* Fila 3: Círculos pequeños (oculta si no hay) */}
+              {zonasEscenario.some(
+                (z) => z.tamaño === "pequeño" && z.tipo === "circulo"
+              ) && (
+                <div
+                  className="flex justify-center flex-wrap mb-2 gap-1"
+                  data-no-dnd="true"
+                >
+                  {zonasEscenario
+                    .filter(
+                      (z) => z.tamaño === "pequeño" && z.tipo === "circulo"
+                    )
+                    .slice(0, 5)
+                    .map((zona) => {
+                      const figuraEmparejadaId = Object.keys(emparejados).find(
+                        (figuraId) => emparejados[figuraId] === zona.id
+                      );
+                      const figuraColocada = figuraEmparejadaId
+                        ? figurasEscenario.find(
+                            (f) => f.id === figuraEmparejadaId
+                          )
+                        : undefined;
+                      return (
+                        <DropZona
+                          key={zona.id}
+                          id={zona.id}
+                          tipo={zona.tipo}
+                          figuraEjemplo={{
+                            tipo: zona.tipo,
+                            color: zona.color,
+                            tamaño: zona.tamaño,
+                          }}
+                          figuraColocada={
+                            figuraColocada
+                              ? {
+                                  id: figuraColocada.id,
+                                  tipo: figuraColocada.tipo,
+                                  color: figuraColocada.color,
+                                  tamaño: figuraColocada.tamaño,
+                                }
+                              : undefined
+                          }
+                          onMeasure={handleZoneMeasure}
+                          figurasColocadas={figurasPorZona[zona.id]}
+                          overlayMode={overlayMode}
+                          orderIds={zoneOrder[zona.id]}
+                          draggingId={draggingId || undefined}
+                        />
+                      );
+                    })}
+                </div>
+              )}
+              {/* Fila 4: Cuadros pequeños (oculta si no hay) */}
+              {zonasEscenario.some(
+                (z) => z.tamaño === "pequeño" && z.tipo === "cuadro"
+              ) && (
+                <div
+                  className="flex justify-center flex-wrap gap-1"
+                  data-no-dnd="true"
+                >
+                  {zonasEscenario
+                    .filter(
+                      (z) => z.tamaño === "pequeño" && z.tipo === "cuadro"
+                    )
+                    .slice(0, 5)
+                    .map((zona) => {
+                      const figuraEmparejadaId = Object.keys(emparejados).find(
+                        (figuraId) => emparejados[figuraId] === zona.id
+                      );
+                      const figuraColocada = figuraEmparejadaId
+                        ? figurasEscenario.find(
+                            (f) => f.id === figuraEmparejadaId
+                          )
+                        : undefined;
+                      return (
+                        <DropZona
+                          key={zona.id}
+                          id={zona.id}
+                          tipo={zona.tipo}
+                          figuraEjemplo={{
+                            tipo: zona.tipo,
+                            color: zona.color,
+                            tamaño: zona.tamaño,
+                          }}
+                          figuraColocada={
+                            figuraColocada
+                              ? {
+                                  id: figuraColocada.id,
+                                  tipo: figuraColocada.tipo,
+                                  color: figuraColocada.color,
+                                  tamaño: figuraColocada.tamaño,
+                                }
+                              : undefined
+                          }
+                          onMeasure={handleZoneMeasure}
+                          figurasColocadas={figurasPorZona[zona.id]}
+                          overlayMode={overlayMode}
+                          orderIds={zoneOrder[zona.id]}
+                          draggingId={draggingId || undefined}
+                        />
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
 
-        {/* Área de figuras disponibles organizadas por tamaño (filtradas por escenario) */}
-        <div
-          className="flex flex-col items-center flex-1 justify-start overflow-auto pb-16"
-          data-no-dnd="true"
-        >
+          {/* Área de figuras disponibles organizadas por tamaño (filtradas por escenario) */}
           <div
-            className="flex flex-col items-center gap-2 w-full px-1"
+            className="flex flex-col items-center flex-1 justify-start overflow-hidden pb-16"
             data-no-dnd="true"
           >
-            {/* Fila 1: Círculos grandes */}
             <div
-              className="flex flex-wrap justify-center gap-1"
+              className="flex flex-col items-center gap-2 w-full px-1"
               data-no-dnd="true"
             >
-              {figurasEscenario
-                .filter(
-                  (item) =>
-                    item.tamaño === "grande" &&
-                    item.tipo === "circulo" &&
-                    !emparejados[item.id]
-                )
-                .slice(0, 5)
-                .map((item) => (
-                  <DraggableFigura
-                    key={item.id}
-                    {...item}
-                    onSelect={handleSelect}
-                    selected={seleccion.includes(item.id)}
-                  />
-                ))}
-            </div>
-            {/* Fila 2: Cuadros grandes */}
-            <div
-              className="flex flex-wrap justify-center gap-1"
-              data-no-dnd="true"
-            >
-              {figurasEscenario
-                .filter(
-                  (item) =>
-                    item.tamaño === "grande" &&
-                    item.tipo === "cuadro" &&
-                    !emparejados[item.id]
-                )
-                .slice(0, 5)
-                .map((item) => (
-                  <DraggableFigura
-                    key={item.id}
-                    {...item}
-                    onSelect={handleSelect}
-                    selected={seleccion.includes(item.id)}
-                  />
-                ))}
-            </div>
-            {/* Fila 3: Círculos pequeños (oculta si escenario es sin-pequeñas) */}
-            {faseActual?.escenario !== "sin-pequeñas" && (
+              {/* Fila 1: Círculos grandes */}
               <div
                 className="flex flex-wrap justify-center gap-1"
                 data-no-dnd="true"
@@ -1858,7 +1819,7 @@ export default function Juego() {
                 {figurasEscenario
                   .filter(
                     (item) =>
-                      item.tamaño === "pequeño" &&
+                      item.tamaño === "grande" &&
                       item.tipo === "circulo" &&
                       !emparejados[item.id]
                   )
@@ -1872,9 +1833,7 @@ export default function Juego() {
                     />
                   ))}
               </div>
-            )}
-            {/* Fila 4: Cuadros pequeños (oculta si escenario es sin-pequeñas) */}
-            {faseActual?.escenario !== "sin-pequeñas" && (
+              {/* Fila 2: Cuadros grandes */}
               <div
                 className="flex flex-wrap justify-center gap-1"
                 data-no-dnd="true"
@@ -1882,7 +1841,7 @@ export default function Juego() {
                 {figurasEscenario
                   .filter(
                     (item) =>
-                      item.tamaño === "pequeño" &&
+                      item.tamaño === "grande" &&
                       item.tipo === "cuadro" &&
                       !emparejados[item.id]
                   )
@@ -1896,72 +1855,74 @@ export default function Juego() {
                     />
                   ))}
               </div>
-            )}
-          </div>
-        </div>
-        {/* Drag overlay para evitar clipping mientras se arrastra */}
-        <DragOverlay>
-          {activeFigura ? (
-            <div
-              className={`pointer-events-none ${
-                activeFigura.tamaño === "grande" ? "w-16 h-16" : "w-12 h-12"
-              } ${
-                activeFigura.tipo === "circulo" ? "rounded-full" : "rounded"
-              } ${colorMap[activeFigura.color]} shadow-lg`}
-            />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-
-      {juegoCompletado && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-8 rounded-xl shadow-2xl text-center">
-            <h3 className="text-3xl font-bold text-green-600 mb-4">
-              🎉 ¡Felicitaciones!
-            </h3>
-            <p className="text-lg mb-2">Completaste el juego</p>
-            <div className="mb-4">
-              <p className="text-gray-600">
-                Total de intentos fallidos:{" "}
-                <span className="font-bold text-red-600">
-                  {intentosFallidos}
-                </span>
-              </p>
-              <p className="text-gray-600">
-                Figuras correctas:{" "}
-                <span className="font-bold text-green-600">
-                  {figurasBase.length}
-                </span>
-              </p>
-              <p className="text-gray-600 mt-2">
-                Puntuación:{" "}
-                <span className="font-bold text-blue-600">
-                  {Math.max(0, 100 - intentosFallidos * 10)}%
-                </span>
-              </p>
-            </div>
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={mezclarJuego}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-              >
-                🔀 Jugar de nuevo (Mezclado)
-              </button>
-              <button
-                onClick={reiniciarJuego}
-                className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-              >
-                🔄 Reiniciar
-              </button>
+              {/* Fila 3: Círculos pequeños (oculta si escenario es sin-pequeñas) */}
+              {faseActual?.escenario !== "sin-pequeñas" && (
+                <div
+                  className="flex flex-wrap justify-center gap-1"
+                  data-no-dnd="true"
+                >
+                  {figurasEscenario
+                    .filter(
+                      (item) =>
+                        item.tamaño === "pequeño" &&
+                        item.tipo === "circulo" &&
+                        !emparejados[item.id]
+                    )
+                    .slice(0, 5)
+                    .map((item) => (
+                      <DraggableFigura
+                        key={item.id}
+                        {...item}
+                        onSelect={handleSelect}
+                        selected={seleccion.includes(item.id)}
+                      />
+                    ))}
+                </div>
+              )}
+              {/* Fila 4: Cuadros pequeños (oculta si escenario es sin-pequeñas) */}
+              {faseActual?.escenario !== "sin-pequeñas" && (
+                <div
+                  className="flex flex-wrap justify-center gap-1"
+                  data-no-dnd="true"
+                >
+                  {figurasEscenario
+                    .filter(
+                      (item) =>
+                        item.tamaño === "pequeño" &&
+                        item.tipo === "cuadro" &&
+                        !emparejados[item.id]
+                    )
+                    .slice(0, 5)
+                    .map((item) => (
+                      <DraggableFigura
+                        key={item.id}
+                        {...item}
+                        onSelect={handleSelect}
+                        selected={seleccion.includes(item.id)}
+                      />
+                    ))}
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+          {/* Drag overlay para evitar clipping mientras se arrastra */}
+          <DragOverlay>
+            {activeFigura ? (
+              <div
+                className={`pointer-events-none ${
+                  activeFigura.tamaño === "grande" ? "w-16 h-16" : "w-12 h-12"
+                } ${
+                  activeFigura.tipo === "circulo" ? "rounded-full" : "rounded"
+                } ${colorMap[activeFigura.color]} shadow-lg`}
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+        {/* sin modal; la indicación se muestra en el nav superior */}
 
-      {/* sin modal; la indicación se muestra en el nav superior */}
-
-      {/* Feedback visual flotante */}
-      <FeedbackVisual tipo={feedbackTipo} onComplete={() => {}} />
+        {/* Feedback visual flotante */}
+        <FeedbackVisual tipo={feedbackTipo} onComplete={() => {}} />
+      </div>
     </main>
   );
 }
