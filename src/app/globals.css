@@ -1,3 +1,12 @@
+/* Quitar scroll en landscape */
+@media (orientation: landscape) {
+  html, body {
+    overflow: hidden !important;
+    overscroll-behavior: none;
+    height: 100vh;
+    max-height: 100vh;
+  }
+}
 @import "tailwindcss";
 
 :root {
