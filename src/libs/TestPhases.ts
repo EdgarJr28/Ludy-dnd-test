@@ -72,19 +72,19 @@ export const fasesTest: FaseTest[] = [
     titulo: "Retirar las figuras pequeñas",
     escenario: "sin-pequeñas",
     indicaciones: [
-      "Ponga el circulo rojo sobre el cuadrado verde",
+/*       "Ponga el circulo rojo sobre el cuadrado verde",
       "Toque el circulo negro con el cuadrado rojo",
       "Señale el circulo negro y el cuadrado rojo",
       "Señale el circulo negro o el cuadrado rojo",
       "Coloque el cuadrado verde lejos del cuadrado amarillo",
       "Si hay un circulo blanco señale el cuadrado rojo",
       "Coloque el cuadrado verde junto al circulo amarillo",
-      "Señale todos los cuadrados lentamente y los circulos rápidamente",
+      "Señale todos los cuadrados lentamente y los circulos rápidamente", */
       "Coloque el circulo rojo entre el cuadrado amarillo y el cuadrado verde",
-      "Toque todos los circulos menos el verde",
+/*       "Toque todos los circulos menos el verde",
       "Señale el circulo rojo con el cuadrado blanco",
       "En lugar del cuadrado blanco señale el circulo amarillo",
-      "Además del circulo amarillo señale el circulo negro",
+      "Además del circulo amarillo señale el circulo negro", */
     ],
   },
 ];
@@ -108,7 +108,7 @@ export type IndicacionParte = {
 };
 
 export type IndicacionAnalizada = {
-  tipo: "simple" | "compuesta-y" | "compuesta-o" | "todos" | "compleja";
+  tipo: "simple" | "compuesta-y" | "compuesta-o" | "todos" | "compleja" | "entre";
   partes: IndicacionParte[];
 };
 
@@ -160,6 +160,36 @@ export function analizarIndicacion(texto: string): IndicacionAnalizada {
       color: getColor(t),
     };
     return { tipo: "todos", partes: [parte] };
+  }
+
+
+  // Manejo especial para instrucciones tipo "entre"
+  if (t.includes("entre") && t.includes(" y ")) {
+    // Ejemplo: "Coloque el circulo rojo entre el cuadrado amarillo y el cuadrado verde"
+    // Extraer A, B y C
+    // A: antes de 'entre', B: entre 'entre' y 'y', C: después de 'y'
+    const reEntre = /(?:el|la|un|una)?\s*([^ ]+\s+(?:circulo|círculo|cuadrado|cuadro)[^ ]*) entre ([^ ]+\s+(?:circulo|círculo|cuadrado|cuadro)[^ ]*) y ([^ ]+\s+(?:circulo|círculo|cuadrado|cuadro)[^ ]*)/i;
+    const m = reEntre.exec(t);
+    if (m) {
+    const [, aRaw, bRaw, cRaw] = m;
+      const part = (s: string): IndicacionParte => ({
+        tipo: s.includes("circulo") || s.includes("círculo") ? "circulo" : s.includes("cuadrado") || s.includes("cuadro") ? "cuadro" : undefined,
+        tamaño: s.includes("pequeño") || s.includes("pequeno") ? "pequeño" : s.includes("grande") ? "grande" : undefined,
+        color: getColor(s),
+      });
+      return { tipo: "entre", partes: [part(aRaw), part(bRaw), part(cRaw)] };
+    } else {
+      // Fallback: split manual
+      const [antesEntre, despuesEntre] = t.split("entre");
+      const [bRaw, cRaw] = despuesEntre.split(" y ");
+      const aRaw = antesEntre.replace(/coloque|ponga|el|la|un|una/g, "").trim();
+      const part = (s: string): IndicacionParte => ({
+        tipo: s.includes("circulo") || s.includes("círculo") ? "circulo" : s.includes("cuadrado") || s.includes("cuadro") ? "cuadro" : undefined,
+        tamaño: s.includes("pequeño") || s.includes("pequeno") ? "pequeño" : s.includes("grande") ? "grande" : undefined,
+        color: getColor(s),
+      });
+      return { tipo: "entre", partes: [part(aRaw), part(bRaw), part(cRaw)] };
+    }
   }
 
   if (t.includes(" y ")) {
