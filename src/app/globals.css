@@ -1,3 +1,11 @@
+/* Mejorar compatibilidad DND en Android: evitar gestos nativos */
+.escenario-sin-scroll {
+  touch-action: none !important;
+}
+
+.figura-draggable {
+  touch-action: none !important;
+}
 /* Quitar scroll al div del escenario en landscape y móviles */
 @media (orientation: landscape) {
   .escenario-sin-scroll {
