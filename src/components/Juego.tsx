@@ -12,86 +12,14 @@ import {
 } from "@dnd-kit/core";
 import DropZona from "../components/DropZona";
 import DraggableFigura from "../components/DraggableFigura";
-import { figurasBase, figurasMeta } from "@/libs/Figuras";
-import { fasesTest, analizarIndicacion } from "@/libs/TestPhases";
-// Hook para manejar preguntas aleatorias sin repetición por fase
-function useRandomNoRepeatIndicacion(faseIdx: number, total: number) {
-  const [usadas, setUsadas] = React.useState<Set<number>>(new Set());
-  const [lastIdx, setLastIdx] = React.useState<number | null>(null);
-  // Llama para obtener un índice aleatorio no repetido
-  const getNoRepeat = React.useCallback(() => {
-    if (usadas.size >= total) {
-      setUsadas(new Set());
-      setLastIdx(null);
-      return 0; // reinicia y muestra la primera
-    }
-    let idx = Math.floor(Math.random() * total);
-    let tries = 0;
-    while ((usadas.has(idx) || idx === lastIdx) && tries < 50) {
-      idx = Math.floor(Math.random() * total);
-      tries++;
-    }
-    setUsadas((prev) => new Set(prev).add(idx));
-    setLastIdx(idx);
-    return idx;
-  }, [usadas, total, lastIdx]);
-  // Resetear cuando cambia la fase
-  React.useEffect(() => {
-    setUsadas(new Set());
-    setLastIdx(null);
-  }, [faseIdx, total]);
-  return getNoRepeat;
-}
+import { figurasBase, figurasMeta } from "@/libs/game/figuras";
 import FeedbackVisual from "../components/FeedbackVisual";
-
-// Función para mezclar arrays
-
-// Función global para mezclar arrays
-function shuffleArray<T>(array: T[]): T[] {
-  const newArray = [...array];
-  for (let i = newArray.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-  }
-  return newArray;
-}
-
-// Mezcla asegurando que en cada columna (por fila de círculo y cuadro) no se repita el color
-function shuffleNoRepeatColor(figurasBase: any[]): any[] {
-  const cg = figurasBase.filter(
-    (f) => f.tamaño === "grande" && f.tipo === "circulo"
-  );
-  const qg = figurasBase.filter(
-    (f) => f.tamaño === "grande" && f.tipo === "cuadro"
-  );
-  const cp = figurasBase.filter(
-    (f) => f.tamaño === "pequeño" && f.tipo === "circulo"
-  );
-  const qp = figurasBase.filter(
-    (f) => f.tamaño === "pequeño" && f.tipo === "cuadro"
-  );
-  let ok = false;
-  let maxTries = 20;
-  let res: any[] = [];
-  while (!ok && maxTries-- > 0) {
-    const scg = shuffleArray(cg);
-    const sqg = shuffleArray(qg);
-    ok = true;
-    for (let i = 0; i < 5; i++) {
-      if (scg[i].color === sqg[i].color) {
-        ok = false;
-        break;
-      }
-    }
-    if (ok) {
-      const scp = shuffleArray(cp);
-      const sqp = shuffleArray(qp);
-      res = [...scg, ...sqg, ...scp, ...sqp];
-    }
-  }
-  if (!ok) return shuffleArray(figurasBase);
-  return res;
-}
+import { fasesTest } from "@/data/test-fases";
+import { analizarIndicacion } from "@/libs/game/indicaciones/indicaciones";
+import { useRandomNoRepeatIndicacion } from "@/hooks/game/useRandomNoRepeatIndicacion";
+import { shuffleArray, shuffleNoRepeatColor } from "@/libs/game/shuffle";
+import { useComputeTodosMenosTarget } from "@/hooks/game/useComputeTodosMenosTarget";
+import { useParseSiHayTargets } from "@/hooks/game/useParseSiHayTargets";
 
 export default function Juego() {
   // Para consignas mixtas: guardar tiempo de inicio de cada grupo
@@ -168,9 +96,6 @@ export default function Juego() {
     []
   );
 
-  // Construir mapa zonaId -> lista de figuras colocadas para renderizar agrupaciones
-  // (lo declaramos después de definir figurasEscenario)
-
   // Configurar sensores para requerir movimiento antes de iniciar drag
   const pointerSensor = useSensor(PointerSensor, {
     activationConstraint: {
@@ -192,9 +117,9 @@ export default function Juego() {
     (ok: boolean, detalle?: string) => {
       const txt = indicacion?.texto || "(sin indicación)";
       const prefix = ok ? "✅" : "❌";
-      console.log(
+      /*   console.log(
         `[VALIDACION] ${prefix} ${txt}${detalle ? ` — ${detalle}` : ""}`
-      );
+      ); */
       if (ok) setAciertos((prev) => prev + 1);
     },
     [indicacion?.texto]
@@ -268,8 +193,7 @@ export default function Juego() {
     setTiempoInicioCuad(null);
     setTiempoFinCuad(null);
     setTiempoInicioCirc(null);
-    // Ya no se usa setIndicacion
-    // limpiar emparejamientos al cambiar de fase para mantener el mismo escenario pero sin estado previo
+
     setEmparejados({});
     setZoneOrder({});
     setIntentosFallidos(0);
@@ -285,478 +209,9 @@ export default function Juego() {
     setTiempoInicio(Date.now());
   }, [indicacionIdx]);
 
-  // sin modal, iniciación implícita al cambiar fase o al avanzar de indicación
-
-  // Helpers de búsqueda según atributos
-  type Figura = (typeof figurasBase)[number];
-  const buscarFiguras = useCallback(
-    (pred: (f: Figura) => boolean) => figurasEscenario.filter(pred),
-    [figurasEscenario]
-  );
-
-  // Parser básico para instrucciones “Señale …” compatibles
-  const validarSeleccion = useCallback(() => {
-    // Validación especial para consignas de velocidad
-    const texto = indicacion?.texto.toLowerCase() || "";
-    // Consigna mixta: "Señale todos los cuadrados lentamente y los círculos rápidamente"
-    const esMixta =
-      texto.includes("cuadrados") &&
-      texto.includes("lenta") &&
-      texto.includes("circulos") &&
-      texto.includes("rápid");
-    if (esMixta) {
-      const cuadrados = figurasEscenario.filter((f) => f.tipo === "cuadro");
-      const circulos = figurasEscenario.filter((f) => f.tipo === "circulo");
-      const seleccionSet = new Set(seleccion);
-      const selCuad = cuadrados.filter((f) => seleccionSet.has(f.id));
-      const selCirc = circulos.filter((f) => seleccionSet.has(f.id));
-      // Si empieza a seleccionar cuadrados, guardar tiempo de inicio
-      if (selCuad.length === 1 && !tiempoInicioCuad)
-        setTiempoInicioCuad(Date.now());
-      // Si termina de seleccionar cuadrados, guardar tiempo de fin y tiempo de inicio de círculos
-      if (selCuad.length === cuadrados.length && !tiempoFinCuad) {
-        setTiempoFinCuad(Date.now());
-        setTiempoInicioCirc(Date.now());
-      }
-      // Si empieza a seleccionar círculos, guardar tiempo de inicio si no se ha guardado
-      if (selCirc.length === 1 && !tiempoInicioCirc && tiempoFinCuad)
-        setTiempoInicioCirc(Date.now());
-      // Solo validar si ambos grupos están completos
-      if (
-        selCuad.length === cuadrados.length &&
-        selCirc.length === circulos.length &&
-        tiempoInicioCuad &&
-        tiempoFinCuad &&
-        tiempoInicioCirc
-      ) {
-        const deltaCuad = (tiempoFinCuad - tiempoInicioCuad) / 1000;
-        const deltaCirc = (Date.now() - tiempoInicioCirc) / 1000;
-        let ok = false;
-        let msg = "";
-        // Validar todos los casos
-        if (deltaCuad >= 4 && deltaCirc <= 2) {
-          ok = true;
-          msg = `✅ Correcto (cuadrados lento: ${deltaCuad.toFixed(
-            2
-          )}s, círculos rápido: ${deltaCirc.toFixed(2)}s)`;
-          setAciertos((prev) => prev + 1);
-        } else {
-          if (deltaCuad < 4 && deltaCirc > 2) {
-            msg = `❌ Cuadrados demasiado rápido (${deltaCuad.toFixed(
-              2
-            )}s) | ❌ Círculos demasiado lento (${deltaCirc.toFixed(2)}s)`;
-          } else if (deltaCuad < 4) {
-            msg = `❌ Cuadrados demasiado rápido (${deltaCuad.toFixed(2)}s)`;
-          } else if (deltaCirc > 2) {
-            msg = `❌ Círculos demasiado lento (${deltaCirc.toFixed(2)}s)`;
-          }
-          setIntentosFallidos((prev) => prev + 1);
-        }
-        setMensajeValidacion(msg);
-        setFeedbackTipo(ok ? "exito" : "error");
-        setTimeout(
-          () => {
-            setFeedbackTipo(null);
-            if (ok) {
-              if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
-                setFaseIdx((prev) => prev + 1);
-                setIndicacionIdx(0);
-              } else {
-                setIndicacionIdx((prev) => prev + 1);
-              }
-              setSeleccion([]);
-              setTiempoInicioCuad(null);
-              setTiempoFinCuad(null);
-              setTiempoInicioCirc(null);
-              setTiempoInicio(Date.now());
-            }
-          },
-          ok ? 1000 : 1200
-        );
-      }
-      return;
-    }
-    // Consignas simples de velocidad
-    const isRapido =
-      texto.includes("rápid") ||
-      texto.includes("rapido") ||
-      texto.includes("rápidamente") ||
-      texto.includes("rapidamente");
-    const isLento = texto.includes("lenta") || texto.includes("lentamente");
-    const esTodosCuadrados =
-      texto.includes("todos los cuadrados") ||
-      texto.includes("todos los cuadros");
-    const esTodosCirculos =
-      texto.includes("todos los circulos") ||
-      texto.includes("todos los círculos");
-    if ((isRapido || isLento) && (esTodosCuadrados || esTodosCirculos)) {
-      // Determinar el tipo
-      const tipo = esTodosCuadrados ? "cuadro" : "circulo";
-      const candidatos = figurasEscenario.filter((f) => f.tipo === tipo);
-      const seleccionSet = new Set(seleccion);
-      const selFig = figurasEscenario.filter((f) => seleccionSet.has(f.id));
-      // Si seleccionó todos los del tipo
-      if (
-        selFig.length === candidatos.length &&
-        selFig.every((f) => f.tipo === tipo)
-      ) {
-        const tiempoFin = Date.now();
-        const delta = tiempoInicio ? (tiempoFin - tiempoInicio) / 1000 : null;
-        let ok = false;
-        let msg = "";
-        if (isRapido && delta !== null && delta <= 2) {
-          ok = true;
-          msg = `✅ Correcto (rápido: ${delta.toFixed(2)}s)`;
-        } else if (isLento && delta !== null && delta >= 4) {
-          ok = true;
-          msg = `✅ Correcto (lento: ${delta.toFixed(2)}s)`;
-        } else if (delta !== null) {
-          msg = isRapido
-            ? `❌ Demasiado lento (${delta.toFixed(2)}s)`
-            : `❌ Demasiado rápido (${delta.toFixed(2)}s)`;
-        } else {
-          msg = "❌ No se pudo medir el tiempo";
-        }
-        setMensajeValidacion(msg);
-        setFeedbackTipo(ok ? "exito" : "error");
-        if (ok) {
-          setTimeout(() => {
-            setFeedbackTipo(null);
-            if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
-              setFaseIdx((prev) => prev + 1);
-              setIndicacionIdx(0);
-            } else {
-              setIndicacionIdx((prev) => prev + 1);
-            }
-            setSeleccion([]);
-            setTiempoInicio(Date.now());
-          }, 1000);
-        } else {
-          setTimeout(() => setFeedbackTipo(null), 1200);
-        }
-      }
-      return;
-    }
-    if (!indicacion) return false;
-    // (Eliminada la redeclaración de 'texto')
-
-    // Normalizar términos
-    const termCirculo = texto.includes("circulo") || texto.includes("círculo");
-    const termCuadrado = texto.includes("cuadrado") || texto.includes("cuadro");
-    const termPequeno = texto.includes("pequeño") || texto.includes("pequeno");
-    const termGrande = texto.includes("grande");
-    const colores: Record<string, boolean> = {
-      rojo: texto.includes("rojo") || texto.includes("roja"),
-      verde: texto.includes("verde"),
-      azul: texto.includes("azul"),
-      amarillo: texto.includes("amarillo") || texto.includes("amarilla"),
-      blanco: texto.includes("blanco") || texto.includes("blanca"),
-      negro: texto.includes("negro") || texto.includes("negra"),
-    };
-
-    const tipo: "circulo" | "cuadro" | null = termCirculo
-      ? "circulo"
-      : termCuadrado
-      ? "cuadro"
-      : null;
-    const tamaño: "pequeño" | "grande" | null = termPequeno
-      ? "pequeño"
-      : termGrande
-      ? "grande"
-      : null;
-
-    const colorClave = Object.keys(colores).find((c) => colores[c]);
-    const colorMapEsToEn: Record<string, string> = {
-      rojo: "red",
-      verde: "green",
-      azul: "blue",
-      amarillo: "yellow",
-      blanco: "white",
-      negro: "black",
-    };
-    const color = colorClave ? colorMapEsToEn[colorClave] : null;
-
-    // Construir el conjunto esperado según palabras clave
-    let candidatos = buscarFiguras(() => true);
-    if (tipo) candidatos = candidatos.filter((f) => f.tipo === tipo);
-    if (color) candidatos = candidatos.filter((f) => f.color === color);
-    if (tamaño) candidatos = candidatos.filter((f) => f.tamaño === tamaño);
-
-    // manejar instrucciones con “y” (dos elementos)
-    const esCompuestaY = texto.includes(" y ");
-    const esCompuestaO = texto.includes(" o ");
-    const esCon = texto.includes(" con ");
-    const esTodos = texto.includes("todos los");
-    const esUn =
-      texto.includes("un ") || (texto.startsWith("señale ") && !esTodos);
-
-    const seleccionSet = new Set(seleccion);
-    const seleccionFiguras = figurasEscenario.filter((f) =>
-      seleccionSet.has(f.id)
-    );
-
-    // Casos “todos los cuadrados/círculos …”
-    if (esTodos) {
-      // determinar el grupo target
-      let target = buscarFiguras(() => true);
-      if (termCirculo) target = target.filter((f) => f.tipo === "circulo");
-      if (termCuadrado) target = target.filter((f) => f.tipo === "cuadro");
-      if (color) target = target.filter((f) => f.color === color);
-      if (tamaño) target = target.filter((f) => f.tamaño === tamaño);
-
-      const targetIds = new Set(target.map((f) => f.id));
-      const selIds = new Set(seleccion);
-      const ok =
-        targetIds.size > 0 &&
-        targetIds.size === selIds.size &&
-        [...targetIds].every((id) => selIds.has(id));
-      setMensajeValidacion(ok ? "✅ Correcto" : "❌ Selección incorrecta");
-      if (ok) setAciertos((prev) => prev + 1);
-      else setIntentosFallidos((prev) => prev + 1);
-      return ok;
-    }
-
-    // Casos con "con" (pares), ej: "toque el circulo negro con el cuadrado rojo" o "señale ... con ..."
-    if (esCon) {
-      const partes = texto.split(" con ");
-      const validarParte = (parte: string): Figura[] => {
-        const p = parte;
-        const isCirc = p.includes("circulo") || p.includes("círculo");
-        const isCuad = p.includes("cuadrado") || p.includes("cuadro");
-        const isPeq = p.includes("pequeño") || p.includes("pequeno");
-        const isGra = p.includes("grande");
-        const cEs = ((): string | undefined => {
-          if (p.includes("rojo") || p.includes("roja")) return "rojo";
-          if (p.includes("verde")) return "verde";
-          if (p.includes("azul")) return "azul";
-          if (p.includes("amarillo") || p.includes("amarilla"))
-            return "amarillo";
-          if (p.includes("blanco") || p.includes("blanca")) return "blanco";
-          if (p.includes("negro") || p.includes("negra")) return "negro";
-          return undefined;
-        })();
-        const c = cEs ? colorMapEsToEn[cEs] : undefined;
-        let cand = buscarFiguras(() => true);
-        if (isCirc) cand = cand.filter((f) => f.tipo === "circulo");
-        if (isCuad) cand = cand.filter((f) => f.tipo === "cuadro");
-        if (c) cand = cand.filter((f) => f.color === c);
-        if (isPeq) cand = cand.filter((f) => f.tamaño === "pequeño");
-        if (isGra) cand = cand.filter((f) => f.tamaño === "grande");
-        return cand;
-      };
-      const setTargets = partes
-        .map(validarParte)
-        .map((arr) => new Set(arr.map((f) => f.id)));
-      const selIds = new Set(seleccion);
-      // Debe haber exactamente 2 selecciones y una debe pertenecer a cada conjunto
-      const ok =
-        seleccionFiguras.length === Math.min(2, setTargets.length) &&
-        setTargets.every((s) => [...selIds].some((id) => s.has(id)));
-      setMensajeValidacion(ok ? "✅ Correcto" : "❌ Selección incorrecta");
-      if (ok) setAciertos((prev) => prev + 1);
-      else setIntentosFallidos((prev) => prev + 1);
-      return ok;
-    }
-
-    // Casos “A y B” / “A o B”: estrategia simple separando por conjunción
-    if (esCompuestaY || esCompuestaO) {
-      // Split por conjunción principal (priorizamos ' y ')
-      const partes = texto.split(esCompuestaY ? " y " : " o ");
-      const validarParte = (parte: string): Figura[] => {
-        const p = parte;
-        const isCirc = p.includes("circulo") || p.includes("círculo");
-        const isCuad = p.includes("cuadrado") || p.includes("cuadro");
-        const isPeq = p.includes("pequeño") || p.includes("pequeno");
-        const isGra = p.includes("grande");
-        const cEs = ((): string | undefined => {
-          if (p.includes("rojo") || p.includes("roja")) return "rojo";
-          if (p.includes("verde")) return "verde";
-          if (p.includes("azul")) return "azul";
-          if (p.includes("amarillo") || p.includes("amarilla"))
-            return "amarillo";
-          if (p.includes("blanco") || p.includes("blanca")) return "blanco";
-          if (p.includes("negro") || p.includes("negra")) return "negro";
-          return undefined;
-        })();
-        const c = cEs ? colorMapEsToEn[cEs] : undefined;
-        let cand = buscarFiguras(() => true);
-        if (isCirc) cand = cand.filter((f) => f.tipo === "circulo");
-        if (isCuad) cand = cand.filter((f) => f.tipo === "cuadro");
-        if (c) cand = cand.filter((f) => f.color === c);
-        if (isPeq) cand = cand.filter((f) => f.tamaño === "pequeño");
-        if (isGra) cand = cand.filter((f) => f.tamaño === "grande");
-        return cand;
-      };
-      const setTargets = partes
-        .map(validarParte)
-        .map((arr) => new Set(arr.map((f) => f.id)));
-      const selIds = new Set(seleccion);
-      let ok = false;
-      if (esCompuestaY) {
-        // Debe contener al menos uno de cada conjunto
-        ok =
-          setTargets.every((s) => [...selIds].some((id) => s.has(id))) &&
-          seleccionFiguras.length === setTargets.length;
-      } else {
-        // Debe contener uno de alguno de los conjuntos (exactamente uno seleccionado)
-        ok =
-          setTargets.some((s) => [...selIds].some((id) => s.has(id))) &&
-          seleccionFiguras.length === 1;
-      }
-      setMensajeValidacion(ok ? "✅ Correcto" : "❌ Selección incorrecta");
-      if (ok) setAciertos((prev) => prev + 1);
-      else setIntentosFallidos((prev) => prev + 1);
-      return ok;
-    }
-
-    // Caso base “Señale …” (uno)
-    if (esUn || tipo || color || tamaño) {
-      const ok =
-        seleccionFiguras.length === 1 &&
-        candidatos.some((c) => c.id === seleccionFiguras[0].id);
-      setMensajeValidacion(ok ? "✅ Correcto" : "❌ Selección incorrecta");
-      if (ok) setAciertos((prev) => prev + 1);
-      else setIntentosFallidos((prev) => prev + 1);
-      return ok;
-    }
-
-    // No soportado (acciones espaciales/tiempo): por ahora marcar como no validable
-    setMensajeValidacion(
-      "ℹ Indicación informativa (no validada automáticamente)"
-    );
-    return true;
-  }, [
-    indicacion,
-    figurasEscenario,
-    seleccion,
-    buscarFiguras,
-    setIntentosFallidos,
-  ]);
-
-  // validación manual ya no es necesaria sin modal
-
-  // Helper: calcular el conjunto objetivo para consignas "todos ... menos ..."
-  const computeTodosMenosTarget = useCallback(
-    (texto: string) => {
-      const t = texto.toLowerCase();
-      if (!t.includes("menos")) return null as Set<string> | null;
-      const partesTodos = t.includes("todos los") || t.includes("todas las");
-      if (!partesTodos) return null;
-      const [antesRaw, despuesRaw] = t.split("menos");
-      const antes = (antesRaw || "").trim();
-      const despues = (despuesRaw || "").trim();
-      const isCirc = antes.includes("circulo") || antes.includes("círculo");
-      const isCuad = antes.includes("cuadrado") || antes.includes("cuadro");
-      const isPeq = antes.includes("pequeño") || antes.includes("pequeno");
-      const isGra = antes.includes("grande");
-      const colorEsToEn: Record<string, string> = {
-        rojo: "red",
-        verde: "green",
-        azul: "blue",
-        amarillo: "yellow",
-        blanco: "white",
-        negro: "black",
-      };
-      const getColor = (s: string): string | undefined => {
-        if (s.includes("rojo") || s.includes("roja")) return colorEsToEn.rojo;
-        if (s.includes("verde")) return colorEsToEn.verde;
-        if (s.includes("azul")) return colorEsToEn.azul;
-        if (s.includes("amarillo") || s.includes("amarilla"))
-          return colorEsToEn.amarillo;
-        if (s.includes("blanco") || s.includes("blanca"))
-          return colorEsToEn.blanco;
-        if (s.includes("negro") || s.includes("negra"))
-          return colorEsToEn.negro;
-        return undefined;
-      };
-      let base = figurasEscenario as typeof figurasBase;
-      if (isCirc) base = base.filter((f) => f.tipo === "circulo");
-      if (isCuad) base = base.filter((f) => f.tipo === "cuadro");
-      if (isPeq) base = base.filter((f) => f.tamaño === "pequeño");
-      if (isGra) base = base.filter((f) => f.tamaño === "grande");
-      const exColor = getColor(despues);
-      const exCirc = despues.includes("circulo") || despues.includes("círculo");
-      const exCuad = despues.includes("cuadrado") || despues.includes("cuadro");
-      const exPeq = despues.includes("pequeño") || despues.includes("pequeno");
-      const exGra = despues.includes("grande");
-      const excluye = (f: (typeof figurasBase)[number]) =>
-        (exColor ? f.color === exColor : false) ||
-        (exCirc ? f.tipo === "circulo" : false) ||
-        (exCuad ? f.tipo === "cuadro" : false) ||
-        (exPeq ? f.tamaño === "pequeño" : false) ||
-        (exGra ? f.tamaño === "grande" : false);
-      const target = base.filter((f) => !excluye(f));
-      return new Set(target.map((f) => f.id));
-    },
-    [figurasEscenario]
-  );
-
-  // Helper: parsear "si hay … señale/toque …" y devolver conjuntos cond/target del escenario
-  const parseSiHayTargets = useCallback(
-    (texto: string): { cond: Set<string>; target: Set<string> } | null => {
-      const t = texto.toLowerCase();
-      if (
-        !t.includes("si hay") ||
-        (!t.includes("señale") && !t.includes("toque"))
-      )
-        return null;
-      const idxIf = t.indexOf("si hay");
-      const idxS = t.indexOf("señale");
-      const idxT = t.indexOf("toque");
-      const idxAction =
-        [idxS, idxT].filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? -1;
-      if (idxAction < 0) return null;
-      let condStr = "";
-      let targetStr = "";
-      if (idxIf < idxAction) {
-        condStr = t.substring(idxIf + 6, idxAction).trim();
-        targetStr = t
-          .substring(idxAction)
-          .replace(/^señale\s+|^toque\s+/, "")
-          .trim();
-      } else {
-        targetStr = t
-          .substring(idxAction, idxIf)
-          .replace(/^señale\s+|^toque\s+/, "")
-          .trim();
-        condStr = t.substring(idxIf + 6).trim();
-      }
-      const toSet = (p: string): Set<string> => {
-        const isCirc = p.includes("circulo") || p.includes("círculo");
-        const isCuad = p.includes("cuadrado") || p.includes("cuadro");
-        const isPeq = p.includes("pequeño") || p.includes("pequeno");
-        const isGra = p.includes("grande");
-        const cEs = ((): string | undefined => {
-          if (p.includes("rojo") || p.includes("roja")) return "rojo";
-          if (p.includes("verde")) return "verde";
-          if (p.includes("azul")) return "azul";
-          if (p.includes("amarillo") || p.includes("amarilla"))
-            return "amarillo";
-          if (p.includes("blanco") || p.includes("blanca")) return "blanco";
-          if (p.includes("negro") || p.includes("negra")) return "negro";
-          return undefined;
-        })();
-        const colorMapEsToEn: Record<string, string> = {
-          rojo: "red",
-          verde: "green",
-          azul: "blue",
-          amarillo: "yellow",
-          blanco: "white",
-          negro: "black",
-        };
-        const c = cEs ? colorMapEsToEn[cEs] : undefined;
-        let cand = figurasEscenario as typeof figurasBase;
-        if (isCirc) cand = cand.filter((f) => f.tipo === "circulo");
-        if (isCuad) cand = cand.filter((f) => f.tipo === "cuadro");
-        if (c) cand = cand.filter((f) => f.color === c);
-        if (isPeq) cand = cand.filter((f) => f.tamaño === "pequeño");
-        if (isGra) cand = cand.filter((f) => f.tamaño === "grande");
-        return new Set(cand.map((f) => f.id));
-      };
-      return { cond: toSet(condStr), target: toSet(targetStr) };
-    },
-    [figurasEscenario]
-  );
+  // Usar el nuevo hook para calcular el conjunto objetivo para consignas "todos ... menos ..."
+  const computeTodosMenosTarget = useComputeTodosMenosTarget(figurasEscenario);
+  const parseSiHayTargets = useParseSiHayTargets(figurasEscenario);
 
   // Validación en vivo al cambiar la selección
   React.useEffect(() => {
@@ -839,7 +294,73 @@ export default function Juego() {
       }
     }
 
-    // Reutilizamos parte de la lógica de parsing para decidir feedback inmediato
+    // Validación especial para consignas "además de ... señale ..."
+    if (texto.includes("además de") && texto.includes("señale")) {
+      // Extraer ambas partes
+      // Ejemplo: "además del círculo amarillo señale el círculo negro"
+      // Buscamos: "además de[...](señale|toque)[...]"
+      const regex = /además de[l]?\s+([^,.;]+)\s+señale\s+el\s+([^,.;]+)/;
+      const match = texto.match(regex);
+      if (match) {
+        const parte1 = match[1].trim();
+        const parte2 = match[2].trim();
+        // Helper para obtener solo el primer id de figura por descripción
+        const getFirstId = (desc: string) => {
+          const isCirc = desc.includes("circulo") || desc.includes("círculo");
+          const isCuad = desc.includes("cuadrado") || desc.includes("cuadro");
+          const cEs = (() => {
+            if (desc.includes("rojo") || desc.includes("roja")) return "red";
+            if (desc.includes("verde")) return "green";
+            if (desc.includes("azul")) return "blue";
+            if (desc.includes("amarillo") || desc.includes("amarilla"))
+              return "yellow";
+            if (desc.includes("blanco") || desc.includes("blanca"))
+              return "white";
+            if (desc.includes("negro") || desc.includes("negra"))
+              return "black";
+            return undefined;
+          })();
+          let cand = figurasEscenario;
+          if (isCirc) cand = cand.filter((f) => f.tipo === "circulo");
+          if (isCuad) cand = cand.filter((f) => f.tipo === "cuadro");
+          if (cEs) cand = cand.filter((f) => f.color === cEs);
+          return cand.length > 0 ? [cand[0].id] : [];
+        };
+        const ids1 = getFirstId(parte1);
+        const ids2 = getFirstId(parte2);
+        const seleccionSet = new Set(seleccion);
+        // Deben estar seleccionadas exactamente ambas
+        const allIds = [...ids1, ...ids2];
+        const selOk =
+          allIds.length === seleccion.length &&
+          allIds.every((id) => seleccionSet.has(id));
+        if (selOk) {
+          logValidacion(true);
+          setMensajeValidacion("✅ Correcto");
+          setFeedbackTipo("exito");
+          setTimeout(() => {
+            setFeedbackTipo(null);
+            // Avanzar a la siguiente indicación o fase
+            if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+              setFaseIdx((prev) => prev + 1);
+              setIndicacionIdx(0);
+            } else {
+              setIndicacionIdx((prev) => prev + 1);
+            }
+            setSeleccion([]);
+          }, 800);
+        } else if (seleccion.length === allIds.length) {
+          setMensajeValidacion("❌ Selección incorrecta");
+          setFeedbackTipo("error");
+          setIntentosFallidos((prev) => prev + 1);
+          setSeleccion([]);
+          setTimeout(() => setFeedbackTipo(null), 1000);
+        }
+        return;
+      }
+    }
+
+    // ...lógica original...
     const termCirculo = texto.includes("circulo") || texto.includes("círculo");
     const termCuadrado = texto.includes("cuadrado") || texto.includes("cuadro");
     const termPequeno = texto.includes("pequeño") || texto.includes("pequeno");
@@ -1068,6 +589,41 @@ export default function Juego() {
       if (parsed && parsed.cond.size > 0) return 1;
       return null;
     }
+    // Límite para consignas "además de ... señale ..."
+    if (texto.includes("además de") && texto.includes("señale")) {
+      // Extraer ambas partes igual que en la validación
+      const regex = /además de[l]?\s+([^,.;]+)\s+señale\s+el\s+([^,.;]+)/;
+      const match = texto.match(regex);
+      if (match) {
+        const parte1 = match[1].trim();
+        const parte2 = match[2].trim();
+        // Helper para obtener solo el primer id de figura por descripción
+        const getFirstId = (desc: string) => {
+          const isCirc = desc.includes("circulo") || desc.includes("círculo");
+          const isCuad = desc.includes("cuadrado") || desc.includes("cuadro");
+          const cEs = (() => {
+            if (desc.includes("rojo") || desc.includes("roja")) return "red";
+            if (desc.includes("verde")) return "green";
+            if (desc.includes("azul")) return "blue";
+            if (desc.includes("amarillo") || desc.includes("amarilla"))
+              return "yellow";
+            if (desc.includes("blanco") || desc.includes("blanca"))
+              return "white";
+            if (desc.includes("negro") || desc.includes("negra"))
+              return "black";
+            return undefined;
+          })();
+          let cand = figurasEscenario;
+          if (isCirc) cand = cand.filter((f) => f.tipo === "circulo");
+          if (isCuad) cand = cand.filter((f) => f.tipo === "cuadro");
+          if (cEs) cand = cand.filter((f) => f.color === cEs);
+          return cand.length > 0 ? 1 : 0;
+        };
+        const count1 = getFirstId(parte1);
+        const count2 = getFirstId(parte2);
+        return count1 + count2;
+      }
+    }
     const esCompuestaY = texto.includes(" y ");
     const esCompuestaO = texto.includes(" o ");
     const esCon = texto.includes(" con ");
@@ -1079,8 +635,6 @@ export default function Juego() {
 
     // Singular determinantes
     if (/(\bun\b|\buna\b|\bel\b|\bla\b)/.test(texto)) return 1;
-
-    // Todos los ... -> tamaño del conjunto objetivo
     if (esTodos) {
       // Reusar lógica básica para determinar conjunto
       const termCirculo =
@@ -1202,8 +756,6 @@ export default function Juego() {
           const selCirc = prev.filter((pid) =>
             circulos.some((c) => c.id === pid)
           );
-          // Solo permitir seleccionar círculos después de terminar con los cuadrados
-          console.log(selCuad.length, cuadrados.length);
           if (figura.tipo === "circulo" && selCuad.length < cuadrados.length) {
             setMensajeValidacion("Primero selecciona todos los cuadrados");
             setFeedbackTipo("error");
@@ -1468,7 +1020,7 @@ export default function Juego() {
     if (handled) {
       const last = liveLogRef.current;
       if (last.overId !== newZ || last.status !== ok) {
-/*         console.log(
+        /*         console.log(
           `[VALIDACION-LIVE] ${ok ? "✅" : "❌"} ${
             indicacion?.texto
           } — entre (preview)`
@@ -1840,6 +1392,16 @@ export default function Juego() {
                     (matchPart(fL, pC) && matchPart(fR, pB));
                   if (neighborsOk) {
                     logValidacion(true, "entre (vecinos)");
+                    // Avanzar a la siguiente indicación o fase
+                    if (
+                      indicacionIdx + 1 >=
+                      fasesTest[faseIdx].indicaciones.length
+                    ) {
+                      setFaseIdx((prev) => prev + 1);
+                      setIndicacionIdx(0);
+                    } else {
+                      setIndicacionIdx((prev) => prev + 1);
+                    }
                     setFeedbackTipo("exito");
                     setTimeout(() => setFeedbackTipo(null), 800);
                     // Ya no se usa setIndicacion
@@ -1913,17 +1475,8 @@ export default function Juego() {
         }
       } else {
         // Incrementar intentos fallidos
-        if (isSpatialDnD) setIntentosFallidos((prev) => prev + 1);
-        // Remover el feedback de error individual
-        console.log("❌ No coinciden:", {
-          figuraType: figura.tipo,
-          figuraColor: figura.color,
-          figuraTamaño: figura.tamaño,
-          zonaType: zona.tipo,
-          zonaColor: zona.color,
-          zonaTamaño: zona.tamaño,
-        });
         if (isSpatialDnD) {
+          setIntentosFallidos((prev) => prev + 1);
           setFeedbackTipo("error");
           setTimeout(() => setFeedbackTipo(null), 800);
         }
