@@ -1739,7 +1739,7 @@ export default function Juego() {
             //onMezclar={mezclarJuego}
             //onReiniciar={reiniciarJuego}
             // modo informativo:
-            controlesDisabled={false}
+            controlesDisabled={true}
             disabledLabel="solo lectura"
           />
         </div>
