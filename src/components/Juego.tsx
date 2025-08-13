@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useMemo } from "react";
+import { useContadorGlobal } from "@/hooks/game/useContadorGlobal";
 import {
   DndContext,
   rectIntersection,
@@ -20,6 +21,8 @@ import { useRandomNoRepeatIndicacion } from "@/hooks/game/useRandomNoRepeatIndic
 import { shuffleArray, shuffleNoRepeatColor } from "@/libs/game/shuffle";
 import { useComputeTodosMenosTarget } from "@/hooks/game/useComputeTodosMenosTarget";
 import { useParseSiHayTargets } from "@/hooks/game/useParseSiHayTargets";
+import IndicacionCartel from "./IndicacionCartel";
+import ResultadosFinales from "./ResultadosFinales";
 
 export default function Juego() {
   // Para consignas mixtas: guardar tiempo de inicio de cada grupo
@@ -39,6 +42,7 @@ export default function Juego() {
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [aciertos, setAciertos] = useState(0);
   const [faseIdx, setFaseIdx] = useState(0);
+  const [testFinalizado, setTestFinalizado] = useState(false);
   // Hook para evitar repetición de preguntas en la fase actual (debe ir después de faseIdx)
   const getNoRepeatIndicacion = useRandomNoRepeatIndicacion(
     faseIdx,
@@ -73,6 +77,9 @@ export default function Juego() {
     white: "bg-white border border-gray-300",
     black: "bg-black",
   };
+
+  // Contador global de correctas/incorrectas
+  const contadorGlobal = useContadorGlobal();
   const handleZoneMeasure = React.useCallback(
     (
       id: string,
@@ -121,7 +128,12 @@ export default function Juego() {
       /*   console.log(
         `[VALIDACION] ${prefix} ${txt}${detalle ? ` — ${detalle}` : ""}`
       ); */
-      if (ok) setAciertos((prev) => prev + 1);
+      if (ok) {
+        setAciertos((prev) => prev + 1);
+        contadorGlobal.sumarCorrecta();
+      } else {
+        contadorGlobal.sumarIncorrecta();
+      }
     },
     [indicacion?.texto]
   );
@@ -256,10 +268,14 @@ export default function Juego() {
         setFeedbackTipo("exito");
         setTimeout(() => {
           setFeedbackTipo(null);
-          // Al cambiar de fase, reiniciar el índice de indicación y limpiar estados
-          setIndicacionIdx(0);
           setSeleccion([]);
         }, 800);
+        if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+          setFaseIdx((prev) => prev + 1);
+          setIndicacionIdx(0);
+        } else {
+          setIndicacionIdx((prev) => prev + 1);
+        }
       }
       return; // no mostrar errores parciales
     }
@@ -318,18 +334,92 @@ export default function Juego() {
         return; // sin selección aún
       }
     }
+      // Validación para consignas "En lugar de X señale Y"
+      if (texto.includes("en lugar de") && texto.includes("señale")) {
+        // Ejemplo: "En lugar del cuadrado blanco señale el circulo amarillo"
+        // Extraer X y Y
+        const regex = /en lugar de[l]?\s+([^,.;]+)\s+señale\s+el\s+([^,.;]+)/;
+        const match = texto.match(regex);
+        if (match) {
+          const parteX = match[1].trim();
+          const parteY = match[2].trim();
+          // Helper para obtener id de figura por descripción
+          const getId = (desc: string) => {
+            const isCirc = desc.includes("circulo") || desc.includes("círculo");
+            const isCuad = desc.includes("cuadrado") || desc.includes("cuadro");
+            const cEs = (() => {
+              if (desc.includes("rojo") || desc.includes("roja")) return "red";
+              if (desc.includes("verde")) return "green";
+              if (desc.includes("azul")) return "blue";
+              if (desc.includes("amarillo") || desc.includes("amarilla")) return "yellow";
+              if (desc.includes("blanco") || desc.includes("blanca")) return "white";
+              if (desc.includes("negro") || desc.includes("negra")) return "black";
+              return undefined;
+            })();
+            let cand = figurasEscenario;
+            if (isCirc) cand = cand.filter((f) => f.tipo === "circulo");
+            if (isCuad) cand = cand.filter((f) => f.tipo === "cuadro");
+            if (cEs) cand = cand.filter((f) => f.color === cEs);
+            return cand.length > 0 ? cand[0].id : null;
+          };
+          const idX = getId(parteX);
+          const idY = getId(parteY);
+          const selSet = new Set(seleccion);
+          // Si no existe X en el escenario, no aplica
+          if (!idX) {
+            setMensajeValidacion("ℹ No aplica");
+            setTimeout(() => {
+              setSeleccion([]);
+            }, 600);
+            return;
+          }
+          // Debe seleccionar Y y no X
+          if (selSet.size === 1) {
+            const only = [...selSet][0];
+            if (only === idY) {
+              logValidacion(true);
+              setMensajeValidacion("✅ Correcto");
+              setFeedbackTipo("exito");
+              setTimeout(() => {
+                setFeedbackTipo(null);
+                if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+                  setFaseIdx((prev) => prev + 1);
+                  setIndicacionIdx(0);
+                } else {
+                  setIndicacionIdx((prev) => prev + 1);
+                }
+                setSeleccion([]);
+              }, 800);
+            } else {
+              setMensajeValidacion("❌ Selección incorrecta");
+              setFeedbackTipo("error");
+              setIntentosFallidos((prev) => prev + 1);
+              setSeleccion([]);
+              setTimeout(() => setFeedbackTipo(null), 1000);
+            }
+            return;
+          }
+          if (selSet.size > 1) {
+            setMensajeValidacion("❌ Selección incorrecta");
+            setFeedbackTipo("error");
+            setIntentosFallidos((prev) => prev + 1);
+            setSeleccion([]);
+            setTimeout(() => setFeedbackTipo(null), 1000);
+            return;
+          }
+          // sin selección aún
+          return;
+        }
+      }
 
     // Validación especial para consignas "además de ... señale ..."
     if (texto.includes("además de") && texto.includes("señale")) {
       // Extraer ambas partes
-      // Ejemplo: "además del círculo amarillo señale el círculo negro"
-      // Buscamos: "además de[...](señale|toque)[...]"
       const regex = /además de[l]?\s+([^,.;]+)\s+señale\s+el\s+([^,.;]+)/;
       const match = texto.match(regex);
       if (match) {
         const parte1 = match[1].trim();
         const parte2 = match[2].trim();
-        // Helper para obtener solo el primer id de figura por descripción
         const getFirstId = (desc: string) => {
           const isCirc = desc.includes("circulo") || desc.includes("círculo");
           const isCuad = desc.includes("cuadrado") || desc.includes("cuadro");
@@ -337,12 +427,9 @@ export default function Juego() {
             if (desc.includes("rojo") || desc.includes("roja")) return "red";
             if (desc.includes("verde")) return "green";
             if (desc.includes("azul")) return "blue";
-            if (desc.includes("amarillo") || desc.includes("amarilla"))
-              return "yellow";
-            if (desc.includes("blanco") || desc.includes("blanca"))
-              return "white";
-            if (desc.includes("negro") || desc.includes("negra"))
-              return "black";
+            if (desc.includes("amarillo") || desc.includes("amarilla")) return "yellow";
+            if (desc.includes("blanco") || desc.includes("blanca")) return "white";
+            if (desc.includes("negro") || desc.includes("negra")) return "black";
             return undefined;
           })();
           let cand = figurasEscenario;
@@ -354,25 +441,24 @@ export default function Juego() {
         const ids1 = getFirstId(parte1);
         const ids2 = getFirstId(parte2);
         const seleccionSet = new Set(seleccion);
-        // Deben estar seleccionadas exactamente ambas
         const allIds = [...ids1, ...ids2];
-        const selOk =
-          allIds.length === seleccion.length &&
-          allIds.every((id) => seleccionSet.has(id));
+        const selOk = allIds.length === seleccion.length && allIds.every((id) => seleccionSet.has(id));
         if (selOk) {
           logValidacion(true);
           setMensajeValidacion("✅ Correcto");
           setFeedbackTipo("exito");
           setTimeout(() => {
             setFeedbackTipo(null);
-            // Avanzar a la siguiente indicación o fase
-            if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+            setSeleccion([]);
+            // Si es la última indicación del test, mostrar resultados
+            if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length && faseIdx + 1 >= fasesTest.length) {
+              setTestFinalizado(true);
+            } else if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
               setFaseIdx((prev) => prev + 1);
               setIndicacionIdx(0);
             } else {
               setIndicacionIdx((prev) => prev + 1);
             }
-            setSeleccion([]);
           }, 800);
         } else if (seleccion.length === allIds.length) {
           setMensajeValidacion("❌ Selección incorrecta");
@@ -861,7 +947,13 @@ export default function Juego() {
           setAciertos((a) => a + 1);
           setTimeout(() => setFeedbackTipo(null), 1000);
           setSeleccion([]);
-          // Aquí puedes avanzar de indicación/fase si lo deseas
+
+          if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+            setFaseIdx((prev) => prev + 1);
+            setIndicacionIdx(0);
+          } else {
+            setIndicacionIdx((prev) => prev + 1);
+          }
           return [];
         }
         return [...prev, id];
@@ -1511,8 +1603,8 @@ export default function Juego() {
         <div className="grid grid-cols-1 md:grid-cols-3 items-start md:items-center gap-2 mb-3 flex-shrink-0">
           {/* Izquierda: título y stats */}
           <div className="order-2 md:order-1 flex flex-wrap gap-2 items-center justify-center md:justify-start">
-            <h2 className="text-base sm:text-lg font-bold">
-              Empareja las figuras
+            {/* <h2 className="text-base sm:text-lg font-bold text-black">
+              Completa la indicación
             </h2>
             <div className="bg-white px-2 py-1 rounded shadow text-xs sm:text-sm">
               <span className="text-red-600 font-semibold">
@@ -1523,47 +1615,33 @@ export default function Juego() {
               <span className="text-green-600 font-semibold">
                 ✅ {aciertos}/{fasesTest[faseIdx]?.indicaciones.length}
               </span>
-            </div>
+            </div> */}
+            {/* Contador global para validación */}
+             <div className="bg-gray-100 px-2 py-1 rounded shadow text-xs sm:text-sm ml-2">
+              <span className="text-blue-700 font-semibold">Global:</span>
+              <span className="ml-1 text-green-600">✔ {contadorGlobal.correctas}</span>
+              <span className="ml-1 text-red-600">✖ {contadorGlobal.incorrectas}</span>
+            </div> 
           </div>
           {/* Centro: indicación visible */}
-          <div className="order-1 md:order-2 flex items-center justify-center gap-2 flex-wrap px-2">
-            <span className="text-xs sm:text-sm text-gray-500">
-              Indicación:
-            </span>
-            <span className="font-medium text-center text-black max-w-[92vw] md:max-w-none break-words leading-snug text-sm">
-              {indicacion?.texto}
-            </span>
-            <button
-              className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs sm:text-sm"
-              onClick={() => {
-                setSeleccion([]);
-                setFiguras(shuffleNoRepeatColor(figurasBase));
-                // Seleccionar una indicación aleatoria NO repetida de la fase actual
-                const fase = fasesTest[faseIdx];
-                if (fase && fase.indicaciones.length > 0) {
-                  const idx = getNoRepeatIndicacion();
-                  setIndicacionIdx(idx);
-                }
-              }}
-            >
-              Aleatoria
-            </button>
+          <div className="order-1 md:order-2 flex items-center justify-center w-full">
+            <IndicacionCartel texto={indicacion?.texto || ""} />
           </div>
           {/* Derecha: fase/escenario y acciones */}
           <div className="order-3 flex flex-wrap gap-2 items-center justify-center md:justify-end">
             <span className="text-xs sm:text-sm text-gray-500">Fase</span>
             <button
-              className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50 text-xs sm:text-sm"
+              className="px-2 py-1 bg-gray-400 rounded disabled:opacity-50 text-xs sm:text-sm"
               onClick={() => setFaseIdx((i) => Math.max(0, i - 1))}
               disabled={faseIdx === 0}
             >
               ◀
             </button>
-            <span className="font-semibold text-xs sm:text-sm">
+            <span className="font-semibold text-xs sm:text-sm text-black">
               {faseIdx + 1} / {fasesTest.length}
             </span>
             <button
-              className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50 text-xs sm:text-sm"
+              className="px-2 py-1 bg-gray-400 rounded disabled:opacity-50 text-xs sm:text-sm"
               onClick={() =>
                 setFaseIdx((i) => Math.min(fasesTest.length - 1, i + 1))
               }
@@ -1576,18 +1654,18 @@ export default function Juego() {
                 ? "todas las fichas"
                 : "sin pequeñas"}
             </span>
-            <button
+            {/* <button
               onClick={mezclarJuego}
               className="ml-0 md:ml-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs sm:text-sm font-semibold transition-colors"
             >
               🔀 Mezclar
-            </button>
-            <button
+            </button> */}
+            {/* <button
               onClick={reiniciarJuego}
               className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs sm:text-sm font-semibold transition-colors"
             >
               🔄 Reiniciar
-            </button>
+            </button> */}
           </div>
         </div>
         <DndContext
@@ -1804,7 +1882,7 @@ export default function Juego() {
 
           {/* Área de figuras disponibles organizadas por tamaño (filtradas por escenario) */}
           <div
-            className="flex flex-col items-center flex-1 justify-start overflow-hidden pb-16"
+            className="flex flex-col items-center flex-1 m-10 p-4 justify-start overflow-hidden pb-16"
             data-no-dnd="true"
           >
             <div
@@ -1920,8 +1998,19 @@ export default function Juego() {
         </DndContext>
         {/* sin modal; la indicación se muestra en el nav superior */}
 
+        {/* Modal de resultados finales */}
+        {testFinalizado && (
+          <ResultadosFinales
+            aciertos={aciertos}
+            errores={intentosFallidos}
+            correctasGlobal={contadorGlobal.correctas}
+            incorrectasGlobal={contadorGlobal.incorrectas}
+            onReiniciar={() => window.location.reload()}
+          />
+        )}
+
         {/* Feedback visual flotante */}
-        <FeedbackVisual tipo={feedbackTipo} onComplete={() => {}} />
+{/*         <FeedbackVisual tipo={feedbackTipo} onComplete={() => {}} /> */}
       </div>
     </main>
   );
