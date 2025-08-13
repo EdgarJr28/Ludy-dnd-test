@@ -5,19 +5,20 @@ import React from "react";
 
 interface Props {
   id: string;
-  tipo: "circulo" | "cuadro" | "rombo";
-  color: "red" | "green" | "yellow" | "white" | "black";
-  tamaño?: "grande" | "mediano";
+  tipo: string;
+  color: string;
+  tamaño?: string;
   onSelect?: (id: string) => void;
   selected?: boolean;
 }
 
 const glossyColorMap: Record<Props["color"], string> = {
-  red:    "bg-gradient-to-br from-rose-400 to-rose-600 text-white",
-  green:  "bg-gradient-to-br from-emerald-400 to-emerald-600 text-white",
+  red: "bg-gradient-to-br from-rose-400 to-rose-600 text-white",
+  green: "bg-gradient-to-br from-emerald-400 to-emerald-600 text-white",
   yellow: "bg-gradient-to-br from-amber-300 to-amber-500 text-black/80",
-  white:  "bg-gradient-to-br from-slate-50 to-slate-200 text-slate-700 border border-white/60",
-  black:  "bg-gradient-to-br from-neutral-800 to-neutral-950 text-white",
+  white:
+    "bg-gradient-to-br from-slate-50 to-slate-200 text-slate-700 border border-white/60",
+  black: "bg-gradient-to-br from-neutral-800 to-neutral-950 text-white",
 };
 
 export default function DraggableFigura({
@@ -58,7 +59,7 @@ export default function DraggableFigura({
       }}
       aria-selected={selected}
       className={clsx(
-        "group",                // para que funcione group-hover del shine
+        "group", // para que funcione group-hover del shine
         sizeClass,
         shapeClass,
         "relative overflow-hidden",
@@ -71,12 +72,11 @@ export default function DraggableFigura({
         isDragging && "scale-105 shadow-2xl shadow-black/25",
 
         // === Estado seleccionado (CLARO, sin blur) ===
-        selected &&
-          [
-            "ring-4 ring-indigo-500",     // borde externo bien definido
-            "ring-offset-2 ring-offset-white/80",
-            "drop-shadow-none",           // sin glow borroso
-          ]
+        selected && [
+          "ring-4 ring-indigo-500", // borde externo bien definido
+          "ring-offset-2 ring-offset-white/80",
+          "drop-shadow-none", // sin glow borroso
+        ]
       )}
     >
       {/* Borde interno fino para aún más contraste al seleccionar */}
