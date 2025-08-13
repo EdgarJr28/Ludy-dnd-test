@@ -64,7 +64,7 @@ export const fasesTest: FaseTest[] = [
     titulo: "Retirar las figuras pequeñas",
     escenario: "sin-pequeñas",
     indicaciones: [
-      "Ponga el circulo rojo sobre el cuadrado verde",
+/*       "Ponga el circulo rojo sobre el cuadrado verde",
       "Toque el circulo negro con el cuadrado rojo",
       "Señale el circulo negro y el cuadrado rojo",
       "Señale el circulo negro o el cuadrado rojo",
@@ -75,7 +75,7 @@ export const fasesTest: FaseTest[] = [
       "Coloque el circulo rojo entre el cuadrado amarillo y el cuadrado verde",
       "Toque todos los circulos menos el verde",
       "Señale el circulo rojo con el cuadrado blanco",
-      "En lugar del cuadrado blanco señale el circulo amarillo",
+      "En lugar del cuadrado blanco señale el circulo amarillo", */
       "Además del circulo amarillo señale el circulo negro",
     ],
   },

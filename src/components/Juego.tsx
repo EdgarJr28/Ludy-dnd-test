@@ -23,6 +23,7 @@ import { useComputeTodosMenosTarget } from "@/hooks/game/useComputeTodosMenosTar
 import { useParseSiHayTargets } from "@/hooks/game/useParseSiHayTargets";
 import IndicacionCartel from "./IndicacionCartel";
 import ResultadosFinales from "./ResultadosFinales";
+import { FaseToolbar } from "./fase-toolbar";
 
 export default function Juego() {
   // Para consignas mixtas: guardar tiempo de inicio de cada grupo
@@ -334,83 +335,86 @@ export default function Juego() {
         return; // sin selección aún
       }
     }
-      // Validación para consignas "En lugar de X señale Y"
-      if (texto.includes("en lugar de") && texto.includes("señale")) {
-        // Ejemplo: "En lugar del cuadrado blanco señale el circulo amarillo"
-        // Extraer X y Y
-        const regex = /en lugar de[l]?\s+([^,.;]+)\s+señale\s+el\s+([^,.;]+)/;
-        const match = texto.match(regex);
-        if (match) {
-          const parteX = match[1].trim();
-          const parteY = match[2].trim();
-          // Helper para obtener id de figura por descripción
-          const getId = (desc: string) => {
-            const isCirc = desc.includes("circulo") || desc.includes("círculo");
-            const isCuad = desc.includes("cuadrado") || desc.includes("cuadro");
-            const cEs = (() => {
-              if (desc.includes("rojo") || desc.includes("roja")) return "red";
-              if (desc.includes("verde")) return "green";
-              if (desc.includes("azul")) return "blue";
-              if (desc.includes("amarillo") || desc.includes("amarilla")) return "yellow";
-              if (desc.includes("blanco") || desc.includes("blanca")) return "white";
-              if (desc.includes("negro") || desc.includes("negra")) return "black";
-              return undefined;
-            })();
-            let cand = figurasEscenario;
-            if (isCirc) cand = cand.filter((f) => f.tipo === "circulo");
-            if (isCuad) cand = cand.filter((f) => f.tipo === "cuadro");
-            if (cEs) cand = cand.filter((f) => f.color === cEs);
-            return cand.length > 0 ? cand[0].id : null;
-          };
-          const idX = getId(parteX);
-          const idY = getId(parteY);
-          const selSet = new Set(seleccion);
-          // Si no existe X en el escenario, no aplica
-          if (!idX) {
-            setMensajeValidacion("ℹ No aplica");
+    // Validación para consignas "En lugar de X señale Y"
+    if (texto.includes("en lugar de") && texto.includes("señale")) {
+      // Ejemplo: "En lugar del cuadrado blanco señale el circulo amarillo"
+      // Extraer X y Y
+      const regex = /en lugar de[l]?\s+([^,.;]+)\s+señale\s+el\s+([^,.;]+)/;
+      const match = texto.match(regex);
+      if (match) {
+        const parteX = match[1].trim();
+        const parteY = match[2].trim();
+        // Helper para obtener id de figura por descripción
+        const getId = (desc: string) => {
+          const isCirc = desc.includes("circulo") || desc.includes("círculo");
+          const isCuad = desc.includes("cuadrado") || desc.includes("cuadro");
+          const cEs = (() => {
+            if (desc.includes("rojo") || desc.includes("roja")) return "red";
+            if (desc.includes("verde")) return "green";
+            if (desc.includes("azul")) return "blue";
+            if (desc.includes("amarillo") || desc.includes("amarilla"))
+              return "yellow";
+            if (desc.includes("blanco") || desc.includes("blanca"))
+              return "white";
+            if (desc.includes("negro") || desc.includes("negra"))
+              return "black";
+            return undefined;
+          })();
+          let cand = figurasEscenario;
+          if (isCirc) cand = cand.filter((f) => f.tipo === "circulo");
+          if (isCuad) cand = cand.filter((f) => f.tipo === "cuadro");
+          if (cEs) cand = cand.filter((f) => f.color === cEs);
+          return cand.length > 0 ? cand[0].id : null;
+        };
+        const idX = getId(parteX);
+        const idY = getId(parteY);
+        const selSet = new Set(seleccion);
+        // Si no existe X en el escenario, no aplica
+        if (!idX) {
+          setMensajeValidacion("ℹ No aplica");
+          setTimeout(() => {
+            setSeleccion([]);
+          }, 600);
+          return;
+        }
+        // Debe seleccionar Y y no X
+        if (selSet.size === 1) {
+          const only = [...selSet][0];
+          if (only === idY) {
+            logValidacion(true);
+            setMensajeValidacion("✅ Correcto");
+            setFeedbackTipo("exito");
             setTimeout(() => {
+              setFeedbackTipo(null);
+              if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+                setFaseIdx((prev) => prev + 1);
+                setIndicacionIdx(0);
+              } else {
+                setIndicacionIdx((prev) => prev + 1);
+              }
               setSeleccion([]);
-            }, 600);
-            return;
-          }
-          // Debe seleccionar Y y no X
-          if (selSet.size === 1) {
-            const only = [...selSet][0];
-            if (only === idY) {
-              logValidacion(true);
-              setMensajeValidacion("✅ Correcto");
-              setFeedbackTipo("exito");
-              setTimeout(() => {
-                setFeedbackTipo(null);
-                if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
-                  setFaseIdx((prev) => prev + 1);
-                  setIndicacionIdx(0);
-                } else {
-                  setIndicacionIdx((prev) => prev + 1);
-                }
-                setSeleccion([]);
-              }, 800);
-            } else {
-              setMensajeValidacion("❌ Selección incorrecta");
-              setFeedbackTipo("error");
-              setIntentosFallidos((prev) => prev + 1);
-              setSeleccion([]);
-              setTimeout(() => setFeedbackTipo(null), 1000);
-            }
-            return;
-          }
-          if (selSet.size > 1) {
+            }, 800);
+          } else {
             setMensajeValidacion("❌ Selección incorrecta");
             setFeedbackTipo("error");
             setIntentosFallidos((prev) => prev + 1);
             setSeleccion([]);
             setTimeout(() => setFeedbackTipo(null), 1000);
-            return;
           }
-          // sin selección aún
           return;
         }
+        if (selSet.size > 1) {
+          setMensajeValidacion("❌ Selección incorrecta");
+          setFeedbackTipo("error");
+          setIntentosFallidos((prev) => prev + 1);
+          setSeleccion([]);
+          setTimeout(() => setFeedbackTipo(null), 1000);
+          return;
+        }
+        // sin selección aún
+        return;
       }
+    }
 
     // Validación especial para consignas "además de ... señale ..."
     if (texto.includes("además de") && texto.includes("señale")) {
@@ -427,9 +431,12 @@ export default function Juego() {
             if (desc.includes("rojo") || desc.includes("roja")) return "red";
             if (desc.includes("verde")) return "green";
             if (desc.includes("azul")) return "blue";
-            if (desc.includes("amarillo") || desc.includes("amarilla")) return "yellow";
-            if (desc.includes("blanco") || desc.includes("blanca")) return "white";
-            if (desc.includes("negro") || desc.includes("negra")) return "black";
+            if (desc.includes("amarillo") || desc.includes("amarilla"))
+              return "yellow";
+            if (desc.includes("blanco") || desc.includes("blanca"))
+              return "white";
+            if (desc.includes("negro") || desc.includes("negra"))
+              return "black";
             return undefined;
           })();
           let cand = figurasEscenario;
@@ -442,7 +449,9 @@ export default function Juego() {
         const ids2 = getFirstId(parte2);
         const seleccionSet = new Set(seleccion);
         const allIds = [...ids1, ...ids2];
-        const selOk = allIds.length === seleccion.length && allIds.every((id) => seleccionSet.has(id));
+        const selOk =
+          allIds.length === seleccion.length &&
+          allIds.every((id) => seleccionSet.has(id));
         if (selOk) {
           logValidacion(true);
           setMensajeValidacion("✅ Correcto");
@@ -451,9 +460,15 @@ export default function Juego() {
             setFeedbackTipo(null);
             setSeleccion([]);
             // Si es la última indicación del test, mostrar resultados
-            if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length && faseIdx + 1 >= fasesTest.length) {
+            if (
+              indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length &&
+              faseIdx + 1 >= fasesTest.length
+            ) {
               setTestFinalizado(true);
-            } else if (indicacionIdx + 1 >= fasesTest[faseIdx].indicaciones.length) {
+            } else if (
+              indicacionIdx + 1 >=
+              fasesTest[faseIdx].indicaciones.length
+            ) {
               setFaseIdx((prev) => prev + 1);
               setIndicacionIdx(0);
             } else {
@@ -1596,77 +1611,137 @@ export default function Juego() {
     }
   };
 
+  const CheckIcon = () => (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="w-3.5 h-3.5">
+      <path
+        d="M20 6L9 17l-5-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+  const CrossIcon = () => (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="w-3.5 h-3.5">
+      <path
+        d="M18 6L6 18M6 6l12 12"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+  const GlobeIcon = () => (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="w-3.5 h-3.5">
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+
   return (
     <main className="h-screen w-screen bg-gray-100 flex flex-col p-2 sm:p-4 overflow-hidden escenario-sin-scroll">
       <div ref={escenarioRef} style={{ width: "100%", height: "100%" }}>
         {/* Header con estadísticas, indicación centrada y controles */}
         <div className="grid grid-cols-1 md:grid-cols-3 items-start md:items-center gap-2 mb-3 flex-shrink-0">
           {/* Izquierda: título y stats */}
-          <div className="order-2 md:order-1 flex flex-wrap gap-2 items-center justify-center md:justify-start">
-            {/* <h2 className="text-base sm:text-lg font-bold text-black">
-              Completa la indicación
-            </h2>
-            <div className="bg-white px-2 py-1 rounded shadow text-xs sm:text-sm">
-              <span className="text-red-600 font-semibold">
-                ❌ {intentosFallidos}
+          <div
+            className="order-2 md:order-1 flex flex-wrap items-center justify-center md:justify-start gap-2"
+            role="status"
+            aria-live="polite"
+            data-testid="stats-bar"
+          >
+            {/* Contador global */}
+            <div
+              className="
+      inline-flex items-center gap-2 rounded-md
+      border border-neutral-200 dark:border-neutral-700
+      bg-white dark:bg-neutral-900
+      px-2 py-1 text-xs sm:text-sm font-medium
+      text-neutral-700 dark:text-neutral-200
+    "
+              title="Contador global"
+            >
+              <GlobeIcon />
+              <span className="sr-only">Global:</span>
+              <span className="text-green-600 dark:text-green-400 inline-flex items-center gap-1">
+                <CheckIcon /> {contadorGlobal.correctas}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span className="text-red-600 dark:text-red-400 inline-flex items-center gap-1">
+                <CrossIcon /> {contadorGlobal.incorrectas}
               </span>
             </div>
-            <div className="bg-white px-2 py-1 rounded shadow text-xs sm:text-sm">
-              <span className="text-green-600 font-semibold">
-                ✅ {aciertos}/{fasesTest[faseIdx]?.indicaciones.length}
-              </span>
+
+            {/* (Opcional) Intentos fallidos — se oculta en pantallas muy pequeñas */}
+            {/*             <div
+              className="
+      hidden sm:inline-flex items-center gap-1 rounded-md
+      border border-neutral-200 dark:border-neutral-700
+      bg-white dark:bg-neutral-900
+      px-2 py-1 text-xs sm:text-sm font-medium
+      text-neutral-700 dark:text-neutral-200
+    "
+              title="Intentos fallidos"
+            >
+              <CrossIcon />
+              <span className="sr-only">Intentos fallidos:</span>
+              {intentosFallidos}
             </div> */}
-            {/* Contador global para validación */}
-             <div className="bg-gray-100 px-2 py-1 rounded shadow text-xs sm:text-sm ml-2">
-              <span className="text-blue-700 font-semibold">Global:</span>
-              <span className="ml-1 text-green-600">✔ {contadorGlobal.correctas}</span>
-              <span className="ml-1 text-red-600">✖ {contadorGlobal.incorrectas}</span>
-            </div> 
+
+            {/* (Opcional) Aciertos de la fase — visible desde sm */}
+            {/* <div
+              className="
+      hidden sm:inline-flex items-center gap-1 rounded-md
+      border border-neutral-200 dark:border-neutral-700
+      bg-white dark:bg-neutral-900
+      px-2 py-1 text-xs sm:text-sm font-medium
+      text-neutral-700 dark:text-neutral-200
+    "
+              title="Aciertos de la fase"
+            >
+              <CheckIcon />
+              <span className="sr-only">Aciertos de la fase:</span>
+              {aciertos}/{fasesTest[faseIdx]?.indicaciones.length}
+            </div> */}
           </div>
           {/* Centro: indicación visible */}
           <div className="order-1 md:order-2 flex items-center justify-center w-full">
             <IndicacionCartel texto={indicacion?.texto || ""} />
           </div>
           {/* Derecha: fase/escenario y acciones */}
-          <div className="order-3 flex flex-wrap gap-2 items-center justify-center md:justify-end">
-            <span className="text-xs sm:text-sm text-gray-500">Fase</span>
-            <button
-              className="px-2 py-1 bg-gray-400 rounded disabled:opacity-50 text-xs sm:text-sm"
-              onClick={() => setFaseIdx((i) => Math.max(0, i - 1))}
-              disabled={faseIdx === 0}
-            >
-              ◀
-            </button>
-            <span className="font-semibold text-xs sm:text-sm text-black">
-              {faseIdx + 1} / {fasesTest.length}
-            </span>
-            <button
-              className="px-2 py-1 bg-gray-400 rounded disabled:opacity-50 text-xs sm:text-sm"
-              onClick={() =>
-                setFaseIdx((i) => Math.min(fasesTest.length - 1, i + 1))
-              }
-              disabled={faseIdx === fasesTest.length - 1}
-            >
-              ▶
-            </button>
-            <span className="ml-0 md:ml-2 text-[11px] sm:text-xs px-2 py-1 rounded bg-amber-50 text-amber-700 whitespace-nowrap">
-              {faseActual?.escenario === "todas"
-                ? "todas las fichas"
-                : "sin pequeñas"}
-            </span>
-            {/* <button
-              onClick={mezclarJuego}
-              className="ml-0 md:ml-2 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs sm:text-sm font-semibold transition-colors"
-            >
-              🔀 Mezclar
-            </button> */}
-            {/* <button
-              onClick={reiniciarJuego}
-              className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs sm:text-sm font-semibold transition-colors"
-            >
-              🔄 Reiniciar
-            </button> */}
-          </div>
+          <FaseToolbar
+            faseIdx={faseIdx}
+            totalFases={fasesTest.length}
+            onPrev={() => setFaseIdx((i) => Math.max(0, i - 1))}
+            onNext={() =>
+              setFaseIdx((i) => Math.min(fasesTest.length - 1, i + 1))
+            }
+            escenario={
+              faseActual?.escenario === "todas" ? "todas" : "sin-pequeñas"
+            }
+            //showExtras
+            //onMezclar={mezclarJuego}
+            //onReiniciar={reiniciarJuego}
+            // modo informativo:
+            controlesDisabled={false}
+            disabledLabel="solo lectura"
+          />
         </div>
         <DndContext
           collisionDetection={rectIntersection}
@@ -2010,7 +2085,7 @@ export default function Juego() {
         )}
 
         {/* Feedback visual flotante */}
-{/*         <FeedbackVisual tipo={feedbackTipo} onComplete={() => {}} /> */}
+        {/*         <FeedbackVisual tipo={feedbackTipo} onComplete={() => {}} /> */}
       </div>
     </main>
   );
