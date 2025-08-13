@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useMemo } from "react";
-import { useContadorGlobal } from "@/hooks/game/useContadorGlobal";
+import { useContadorGlobal } from "@/hooks/token-test/use-contador-global";
 import {
   DndContext,
   rectIntersection,
@@ -11,21 +11,21 @@ import {
   useSensors,
   DragOverlay,
 } from "@dnd-kit/core";
-import DropZona from "../components/DropZona";
-import DraggableFigura from "../components/DraggableFigura";
+import DropZona from "./drop-zona";
+import DraggableFigura from "./draggable-figura";
 import { figurasBase, figurasMeta } from "@/libs/game/figuras";
-import FeedbackVisual from "../components/FeedbackVisual";
+import FeedbackVisual from "./feedback-visual";
 import { fasesTest } from "@/data/test-fases";
 import { analizarIndicacion } from "@/libs/game/indicaciones/indicaciones";
-import { useRandomNoRepeatIndicacion } from "@/hooks/game/useRandomNoRepeatIndicacion";
+import { useRandomNoRepeatIndicacion } from "@/hooks/token-test/use-random-no-repeatIndicacion";
 import { shuffleArray, shuffleNoRepeatColor } from "@/libs/game/shuffle";
-import { useComputeTodosMenosTarget } from "@/hooks/game/useComputeTodosMenosTarget";
-import { useParseSiHayTargets } from "@/hooks/game/useParseSiHayTargets";
-import IndicacionCartel from "./IndicacionCartel";
-import ResultadosFinales from "./ResultadosFinales";
+import { useComputeTodosMenosTarget } from "@/hooks/token-test/use-compute-todos-menos-target";
+import { useParseSiHayTargets } from "@/hooks/token-test/use-parse-si-hay-targets";
+import IndicacionCartel from "./indicacion-cartel";
+import ResultadosFinales from "./resultados-finales";
 import { FaseToolbar } from "./fase-toolbar";
 
-export default function Juego() {
+export default function TokenTestCore() {
   // Para consignas mixtas: guardar tiempo de inicio de cada grupo
   const [tiempoInicioCuad, setTiempoInicioCuad] = useState<number | null>(null);
   const [tiempoFinCuad, setTiempoFinCuad] = useState<number | null>(null);
