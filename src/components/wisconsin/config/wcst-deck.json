@@ -1,0 +1,386 @@
+[
+    {
+        "id": 1,
+        "color": "green",
+        "shape": "triangle",
+        "count": 1
+    },
+    {
+        "id": 2,
+        "color": "red",
+        "shape": "cross",
+        "count": 4
+    },
+    {
+        "id": 3,
+        "color": "blue",
+        "shape": "triangle",
+        "count": 2
+    },
+    {
+        "id": 4,
+        "color": "red",
+        "shape": "circle",
+        "count": 1
+    },
+    {
+        "id": 5,
+        "color": "green",
+        "shape": "star",
+        "count": 4
+    },
+    {
+        "id": 6,
+        "color": "yellow",
+        "shape": "cross",
+        "count": 1
+    },
+    {
+        "id": 7,
+        "color": "blue",
+        "shape": "triangle",
+        "count": 4
+    },
+    {
+        "id": 8,
+        "color": "red",
+        "shape": "circle",
+        "count": 3
+    },
+    {
+        "id": 9,
+        "color": "green",
+        "shape": "cross",
+        "count": 4
+    },
+    {
+        "id": 10,
+        "color": "yellow",
+        "shape": "circle",
+        "count": 2
+    },
+    {
+        "id": 11,
+        "color": "blue",
+        "shape": "star",
+        "count": 1
+    },
+    {
+        "id": 12,
+        "color": "red",
+        "shape": "triangle",
+        "count": 3
+    },
+    {
+        "id": 13,
+        "color": "blue",
+        "shape": "cross",
+        "count": 2
+    },
+    {
+        "id": 14,
+        "color": "yellow",
+        "shape": "star",
+        "count": 1
+    },
+    {
+        "id": 15,
+        "color": "green",
+        "shape": "triangle",
+        "count": 3
+    },
+    {
+        "id": 16,
+        "color": "blue",
+        "shape": "circle",
+        "count": 4
+    },
+    {
+        "id": 17,
+        "color": "red",
+        "shape": "star",
+        "count": 2
+    },
+    {
+        "id": 18,
+        "color": "yellow",
+        "shape": "circle",
+        "count": 3
+    },
+    {
+        "id": 19,
+        "color": "red",
+        "shape": "triangle",
+        "count": 4
+    },
+    {
+        "id": 20,
+        "color": "yellow",
+        "shape": "circle",
+        "count": 1
+    },
+    {
+        "id": 21,
+        "color": "blue",
+        "shape": "star",
+        "count": 2
+    },
+    {
+        "id": 22,
+        "color": "green",
+        "shape": "cross",
+        "count": 3
+    },
+    {
+        "id": 23,
+        "color": "yellow",
+        "shape": "star",
+        "count": 2
+    },
+    {
+        "id": 24,
+        "color": "blue",
+        "shape": "triangle",
+        "count": 3
+    },
+    {
+        "id": 25,
+        "color": "red",
+        "shape": "star",
+        "count": 4
+    },
+    {
+        "id": 26,
+        "color": "yellow",
+        "shape": "triangle",
+        "count": 2
+    },
+    {
+        "id": 27,
+        "color": "blue",
+        "shape": "cross",
+        "count": 3
+    },
+    {
+        "id": 28,
+        "color": "red",
+        "shape": "circle",
+        "count": 4
+    },
+    {
+        "id": 29,
+        "color": "green",
+        "shape": "star",
+        "count": 2
+    },
+    {
+        "id": 30,
+        "color": "red",
+        "shape": "cross",
+        "count": 1
+    },
+    {
+        "id": 31,
+        "color": "green",
+        "shape": "circle",
+        "count": 4
+    },
+    {
+        "id": 32,
+        "color": "red",
+        "shape": "star",
+        "count": 1
+    },
+    {
+        "id": 33,
+        "color": "blue",
+        "shape": "circle",
+        "count": 3
+    },
+    {
+        "id": 34,
+        "color": "yellow",
+        "shape": "cross",
+        "count": 4
+    },
+    {
+        "id": 35,
+        "color": "green",
+        "shape": "star",
+        "count": 1
+    },
+    {
+        "id": 36,
+        "color": "yellow",
+        "shape": "triangle",
+        "count": 4
+    },
+    {
+        "id": 37,
+        "color": "blue",
+        "shape": "circle",
+        "count": 2
+    },
+    {
+        "id": 38,
+        "color": "yellow",
+        "shape": "star",
+        "count": 3
+    },
+    {
+        "id": 39,
+        "color": "green",
+        "shape": "circle",
+        "count": 1
+    },
+    {
+        "id": 40,
+        "color": "blue",
+        "shape": "cross",
+        "count": 4
+    },
+    {
+        "id": 41,
+        "color": "red",
+        "shape": "triangle",
+        "count": 1
+    },
+    {
+        "id": 42,
+        "color": "blue",
+        "shape": "star",
+        "count": 3
+    },
+    {
+        "id": 43,
+        "color": "yellow",
+        "shape": "circle",
+        "count": 4
+    },
+    {
+        "id": 44,
+        "color": "green",
+        "shape": "triangle",
+        "count": 2
+    },
+    {
+        "id": 45,
+        "color": "red",
+        "shape": "star",
+        "count": 3
+    },
+    {
+        "id": 46,
+        "color": "yellow",
+        "shape": "cross",
+        "count": 2
+    },
+    {
+        "id": 47,
+        "color": "blue",
+        "shape": "circle",
+        "count": 1
+    },
+    {
+        "id": 48,
+        "color": "yellow",
+        "shape": "triangle",
+        "count": 3
+    },
+    {
+        "id": 49,
+        "color": "green",
+        "shape": "cross",
+        "count": 2
+    },
+    {
+        "id": 50,
+        "color": "yellow",
+        "shape": "star",
+        "count": 4
+    },
+    {
+        "id": 51,
+        "color": "blue",
+        "shape": "triangle",
+        "count": 1
+    },
+    {
+        "id": 52,
+        "color": "green",
+        "shape": "star",
+        "count": 3
+    },
+    {
+        "id": 53,
+        "color": "red",
+        "shape": "circle",
+        "count": 2
+    },
+    {
+        "id": 54,
+        "color": "green",
+        "shape": "triangle",
+        "count": 4
+    },
+    {
+        "id": 55,
+        "color": "blue",
+        "shape": "cross",
+        "count": 1
+    },
+    {
+        "id": 56,
+        "color": "green",
+        "shape": "circle",
+        "count": 3
+    },
+    {
+        "id": 57,
+        "color": "red",
+        "shape": "cross",
+        "count": 2
+    },
+    {
+        "id": 58,
+        "color": "yellow",
+        "shape": "triangle",
+        "count": 1
+    },
+    {
+        "id": 59,
+        "color": "red",
+        "shape": "cross",
+        "count": 3
+    },
+    {
+        "id": 60,
+        "color": "green",
+        "shape": "circle",
+        "count": 2
+    },
+    {
+        "id": 61,
+        "color": "blue",
+        "shape": "star",
+        "count": 4
+    },
+    {
+        "id": 62,
+        "color": "yellow",
+        "shape": "cross",
+        "count": 3
+    },
+    {
+        "id": 63,
+        "color": "red",
+        "shape": "triangle",
+        "count": 2
+    },
+    {
+        "id": 64,
+        "color": "green",
+        "shape": "star",
+        "count": 1
+    }
+]
