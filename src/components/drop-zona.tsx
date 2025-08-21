@@ -2,7 +2,7 @@
 
 import { useDroppable } from "@dnd-kit/core";
 import React from "react";
-import DraggableFigura from "./DraggableFigura";
+import DraggableFigura from "./draggable-figura";
 
 interface Props {
   id: string;
