@@ -13,9 +13,9 @@ export const COLOR_HEX: Record<Color, string> = {
 
 /** Tamaño más grande por cantidad (da “cuerpo”) */
 export function glyphSizeForCount(count: number) {
-    if (count === 1) return 80;
-    if (count === 2) return 60;
-    if (count === 3) return 54;
+    if (count === 1) return 84;
+    if (count === 2) return 62;
+    if (count === 3) return 56;
     return 48; // 4
 }
 

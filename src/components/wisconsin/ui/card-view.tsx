@@ -25,7 +25,7 @@ export function CardView({ card }: { card: Card }) {
   const rotations = ROTATION_BY_COUNT_INDEX[card.count] ?? ROTATION_BY_COUNT_INDEX[4];
 
   return (
-    <div className="w-40 h-56 rounded-2xl border shadow-sm bg-white relative overflow-hidden">
+    <div className="w-32 h-48  rounded-2xl border shadow-sm bg-white relative overflow-hidden">
       <div className="absolute top-2 left-2 text-[11px] text-gray-400">#{card.id}</div>
 
       {positions.map((pos, i) => (
@@ -43,7 +43,7 @@ export function CardView({ card }: { card: Card }) {
         </div>
       ))}
 
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[11px] text-gray-500 capitalize">
+      <div className="w-full text-center absolute bottom-2 left-1/2 -translate-x-1/2 sm:text-[8px] text-[11px] text-gray-500 capitalize">
         {card.color} / {card.shape} / {card.count}
       </div>
     </div>
